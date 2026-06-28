@@ -59,6 +59,7 @@ interface BusinessSettings {
   booking_approval_mode: "automatic" | "manual";
   allow_client_cancel: boolean;
   cancel_limit_hours: number;
+  default_payment_method?: string;
 }
 
 interface Appointment {
@@ -119,12 +120,42 @@ export default function BookingWizardClient({
   // Checks staff-specific overrides first, then falls back to business-level hours.
   const getEffectiveHours = React.useCallback(
     (dayOfWeek: number, staffId: string) => {
+      const bizHour = workingHours.find((h) => h.day_of_week === dayOfWeek);
+      if (!bizHour || bizHour.is_closed) {
+        return { is_closed: true, open_time: "09:00:00", close_time: "18:00:00" };
+      }
+
       const staffSpecific = staffWorkingHours.find(
         (h) => h.staff_id === staffId && h.day_of_week === dayOfWeek
       );
-      if (staffSpecific) return staffSpecific;
-      // Fall back to business-level hours
-      return workingHours.find((h) => h.day_of_week === dayOfWeek) || null;
+
+      if (staffSpecific) {
+        if (staffSpecific.is_closed) {
+          return { is_closed: true, open_time: "09:00:00", close_time: "18:00:00" };
+        }
+
+        let openTime = staffSpecific.open_time;
+        let closeTime = staffSpecific.close_time;
+
+        if (bizHour.open_time && openTime < bizHour.open_time) {
+          openTime = bizHour.open_time;
+        }
+        if (bizHour.close_time && closeTime > bizHour.close_time) {
+          closeTime = bizHour.close_time;
+        }
+
+        if (openTime >= closeTime) {
+          return { is_closed: true, open_time: "09:00:00", close_time: "18:00:00" };
+        }
+
+        return {
+          is_closed: false,
+          open_time: openTime,
+          close_time: closeTime
+        };
+      }
+
+      return bizHour;
     },
     [workingHours, staffWorkingHours]
   );
@@ -317,6 +348,7 @@ export default function BookingWizardClient({
             end_time: endISO,
             status: status,
             source: "booking_page",
+            payment_method: settings.default_payment_method || "cash",
             notes: notes.trim() || null,
           },
         ]);

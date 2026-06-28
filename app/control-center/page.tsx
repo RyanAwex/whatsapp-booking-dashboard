@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/components/Providers";
 import SearchableDropdown from "@/components/SearchableDropdown";
@@ -39,9 +39,116 @@ const MockQRCode = () => (
     <path d="M5 75h20v20H5V75zm4 4v12h12V79H9z" />
     <path d="M12 82h6v6h-6v-6z" />
     <path d="M35 10h5v5h-5zm10 0h10v5H45zm15 0h5v10h-5zm0 15h5v5h-5zm-25 5h5v5h-5zm10 0h5v10h-5zm15 0h5v5h-5zM35 45h10v5H35zm15 5h10v5H50zm15-5h5v10h-5z" />
-    <path d="M35 60h5v5h-5zm10 5h5v5h-5zm15-5h10v5H60zm15 5h5v10h-5zm0 15h5v5h-5zM45 75h5v10h-5zm15 0h10v5H60zm15 5h5v5h-5z" />
+    <path d="M35 60h5v5h-5zm10 5h5v5h-5zm15-5h10v5H60zm15 5h5v10h-5zm0 15h5v5h-5zM45 75h5v10h-5zm15 0h10v5H60zm15 8h5v5h-5z" />
   </svg>
 );
+
+interface CustomTimePickerProps {
+  value: string;
+  onChange: (val: string) => void;
+  minTime?: string;
+  maxTime?: string;
+  disabled?: boolean;
+}
+
+const CustomTimePicker: React.FC<CustomTimePickerProps> = ({
+  value,
+  onChange,
+  minTime,
+  maxTime,
+  disabled
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const displayVal = value ? value.slice(0, 5) : "09:00";
+
+  // Generate 30-min options
+  const options = Array.from({ length: 48 }, (_, i) => {
+    const h = Math.floor(i / 2).toString().padStart(2, "0");
+    const m = i % 2 === 0 ? "00" : "30";
+    return `${h}:${m}`;
+  });
+
+  // Check clicks outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSelect = (opt: string) => {
+    onChange(`${opt}:00`);
+    setIsOpen(false);
+  };
+
+  // Determine if it should open upwards based on screen space
+  const [openUpward, setOpenUpward] = useState(false);
+  useEffect(() => {
+    if (isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      // If less than 200px below, open upward
+      setOpenUpward(spaceBelow < 200);
+    }
+  }, [isOpen]);
+
+  const minStr = minTime ? minTime.slice(0, 5) : null;
+  const maxStr = maxTime ? maxTime.slice(0, 5) : null;
+
+  return (
+    <div ref={containerRef} className="relative inline-block text-left">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setIsOpen(!isOpen)}
+        className={`flex items-center gap-1.5 rounded-xl border border-slate-250 bg-slate-50/50 px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none hover:bg-slate-100 transition cursor-pointer select-none ${
+          disabled ? "opacity-50 cursor-not-allowed" : ""
+        }`}
+      >
+        <span>{displayVal}</span>
+        <svg className="size-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <div
+          className={`absolute z-50 w-32 rounded-2xl border border-slate-200/80 bg-white p-1.5 shadow-[0_12px_30px_-10px_rgba(15,23,42,0.25)] backdrop-blur max-h-52 overflow-y-auto ${
+            openUpward ? "bottom-full mb-1.5" : "top-full mt-1.5"
+          }`}
+        >
+          {options.map((opt) => {
+            const isAllowed = (!minStr || opt >= minStr) && (!maxStr || opt <= maxStr);
+            const isSelected = opt === displayVal;
+
+            return (
+              <button
+                key={opt}
+                type="button"
+                disabled={!isAllowed}
+                onClick={() => handleSelect(opt)}
+                className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+                  !isAllowed
+                    ? "text-slate-350 bg-transparent cursor-not-allowed opacity-40"
+                    : isSelected
+                    ? "bg-[#0f294a] text-white"
+                    : "text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
 
 interface StaffMember {
   id: string;
@@ -104,6 +211,7 @@ export default function ControlCenterPage() {
   const [approvalMode, setApprovalMode] = useState("automatic");
   const [allowCancel, setAllowCancel] = useState(true);
   const [cancelLimit, setCancelLimit] = useState(24);
+  const [defaultPaymentMethod, setDefaultPaymentMethod] = useState("cash");
 
   // Working Hours States
   const [workingHours, setWorkingHours] = useState<WorkingHour[]>([]);
@@ -185,6 +293,7 @@ export default function ControlCenterPage() {
         setApprovalMode(settingsData.booking_approval_mode || "automatic");
         setAllowCancel(settingsData.allow_client_cancel ?? true);
         setCancelLimit(settingsData.cancel_limit_hours ?? 24);
+        setDefaultPaymentMethod(settingsData.default_payment_method || "cash");
       }
     } catch (err) {
       console.error("Error loading business info:", err);
@@ -378,6 +487,7 @@ export default function ControlCenterPage() {
             booking_approval_mode: approvalMode,
             allow_client_cancel: allowCancel,
             cancel_limit_hours: cancelLimit,
+            default_payment_method: defaultPaymentMethod,
           })
           .eq("id", existingSettings.id);
 
@@ -394,6 +504,7 @@ export default function ControlCenterPage() {
               booking_approval_mode: approvalMode,
               allow_client_cancel: allowCancel,
               cancel_limit_hours: cancelLimit,
+              default_payment_method: defaultPaymentMethod,
             },
           ]);
 
@@ -457,6 +568,7 @@ export default function ControlCenterPage() {
         .order("day_of_week", { ascending: true });
 
       if (updatedHours) setWorkingHours(updatedHours);
+      await fetchStaffHours();
 
       triggerSuccess("Weekly availability hours updated!");
     } catch (err) {
@@ -893,6 +1005,32 @@ export default function ControlCenterPage() {
                   </button>
                 </div>
               </div>
+              <div className="flex items-center justify-between py-2 border-b border-slate-100">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-800">
+                    Default Payment Method
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Select the default payment mode for client bookings.
+                  </p>
+                </div>
+                <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+                  {["cash", "card", "online"].map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setDefaultPaymentMethod(mode)}
+                      className={`px-3 py-1.5 text-xs font-extrabold rounded-lg capitalize transition active:scale-95 cursor-pointer ${
+                        defaultPaymentMethod === mode
+                          ? "bg-white text-slate-900 shadow-sm"
+                          : "text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <button
                 onClick={handleSaveProfile}
@@ -964,40 +1102,16 @@ export default function ControlCenterPage() {
 
                     {!item.is_closed ? (
                       <div className="flex items-center gap-2">
-                        <input
-                          type="time"
-                          value={
-                            item.open_time
-                              ? item.open_time.slice(0, 5)
-                              : "09:00"
-                          }
-                          onChange={(e) =>
-                            handleUpdateHourTime(
-                              idx,
-                              "open_time",
-                              `${e.target.value}:00`,
-                            )
-                          }
-                          className="rounded-xl border border-slate-250 bg-slate-50/50 px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none hover:bg-slate-100 focus:border-slate-400 focus:bg-white transition cursor-pointer"
+                        <CustomTimePicker
+                          value={item.open_time || "09:00:00"}
+                          onChange={(val) => handleUpdateHourTime(idx, "open_time", val)}
                         />
                         <span className="text-xs text-slate-400 font-medium select-none">
                           to
                         </span>
-                        <input
-                          type="time"
-                          value={
-                            item.close_time
-                              ? item.close_time.slice(0, 5)
-                              : "18:00"
-                          }
-                          onChange={(e) =>
-                            handleUpdateHourTime(
-                              idx,
-                              "close_time",
-                              `${e.target.value}:00`,
-                            )
-                          }
-                          className="rounded-xl border border-slate-250 bg-slate-50/50 px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none hover:bg-slate-100 focus:border-slate-400 focus:bg-white transition cursor-pointer"
+                        <CustomTimePicker
+                          value={item.close_time || "18:00:00"}
+                          onChange={(val) => handleUpdateHourTime(idx, "close_time", val)}
                         />
                       </div>
                     ) : (
@@ -1067,7 +1181,7 @@ export default function ControlCenterPage() {
               <div className="space-y-3 max-w-4xl">
                 {staffList.map((member) => {
                   const isHoursOpen = staffHoursOpen === member.id;
-                  // Get or build default hours for this staff member
+                  // Get or build default hours for this staff member (defaulting to current business hours)
                   const memberHours: WorkingHour[] =
                     staffHoursMap[member.id] &&
                     staffHoursMap[member.id].length === 7
@@ -1076,12 +1190,13 @@ export default function ControlCenterPage() {
                           const existing = (
                             staffHoursMap[member.id] || []
                           ).find((h) => h.day_of_week === i);
+                          const bizHour = workingHours.find((bh) => bh.day_of_week === i);
                           return (
                             existing || {
                               day_of_week: i,
-                              open_time: "09:00:00",
-                              close_time: "18:00:00",
-                              is_closed: i === 0,
+                              open_time: bizHour ? bizHour.open_time : "09:00:00",
+                              close_time: bizHour ? bizHour.close_time : "18:00:00",
+                              is_closed: bizHour ? bizHour.is_closed : i === 0,
                             }
                           );
                         });
@@ -1091,8 +1206,30 @@ export default function ControlCenterPage() {
                     field: keyof WorkingHour,
                     value: string | boolean,
                   ) => {
+                    const bizHour = workingHours.find((bh) => bh.day_of_week === dayIdx);
+                    let finalValue = value;
+
+                    if (bizHour) {
+                      if (field === "is_closed" && !value) {
+                        if (bizHour.is_closed) {
+                          alert(`The business is closed on ${DAYS_OF_WEEK[dayIdx]}. You cannot set staff hours for this day.`);
+                          return;
+                        }
+                      }
+                      if (field === "open_time" && typeof finalValue === "string") {
+                        if (bizHour.open_time && finalValue < bizHour.open_time) {
+                          finalValue = bizHour.open_time;
+                        }
+                      }
+                      if (field === "close_time" && typeof finalValue === "string") {
+                        if (bizHour.close_time && finalValue > bizHour.close_time) {
+                          finalValue = bizHour.close_time;
+                        }
+                      }
+                    }
+
                     const updated = memberHours.map((h, i) =>
-                      i === dayIdx ? { ...h, [field]: value } : h,
+                      i === dayIdx ? { ...h, [field]: finalValue } : h,
                     );
                     setStaffHoursMap((prev) => ({
                       ...prev,
@@ -1213,80 +1350,86 @@ export default function ControlCenterPage() {
                           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">
                             {member.name}&rsquo;s Weekly Availability
                           </p>
-                          {memberHours.map((item, dayIdx) => (
-                            <div
-                              key={item.day_of_week}
-                              className={`flex flex-wrap items-center justify-between gap-4 p-3 rounded-xl border transition duration-200 ${
-                                item.is_closed
-                                  ? "bg-slate-50/40 border-slate-100 opacity-60"
-                                  : "bg-white border-slate-200/80"
-                              }`}
-                            >
-                              <div className="flex items-center gap-3 min-w-[120px]">
-                                <button
-                                  onClick={() =>
-                                    updateMemberHour(
-                                      dayIdx,
-                                      "is_closed",
-                                      !item.is_closed,
-                                    )
-                                  }
-                                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none ${
-                                    !item.is_closed
-                                      ? "bg-emerald-500"
-                                      : "bg-slate-200"
-                                  }`}
-                                >
-                                  <span
-                                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                                      !item.is_closed
-                                        ? "translate-x-4"
-                                        : "translate-x-0"
-                                    }`}
-                                  />
-                                </button>
-                                <span className="text-xs font-semibold text-slate-700 select-none">
-                                  {DAYS_OF_WEEK[item.day_of_week]}
-                                </span>
-                              </div>
+                          {memberHours.map((item, dayIdx) => {
+                            const bizHour = workingHours.find((bh) => bh.day_of_week === item.day_of_week);
+                            const isBizClosed = bizHour ? bizHour.is_closed : false;
 
-                              {!item.is_closed ? (
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="time"
-                                    value={item.open_time.slice(0, 5)}
-                                    onChange={(e) =>
+                            return (
+                              <div
+                                key={item.day_of_week}
+                                className={`flex flex-wrap items-center justify-between gap-4 p-3 rounded-xl border transition duration-200 ${
+                                  isBizClosed
+                                    ? "bg-rose-50/20 border-rose-100/60 opacity-60"
+                                    : item.is_closed
+                                    ? "bg-slate-50/40 border-slate-100 opacity-60"
+                                    : "bg-white border-slate-200/80"
+                                }`}
+                              >
+                                <div className="flex items-center gap-3 min-w-[120px]">
+                                  <button
+                                    disabled={isBizClosed}
+                                    onClick={() =>
                                       updateMemberHour(
                                         dayIdx,
-                                        "open_time",
-                                        `${e.target.value}:00`,
+                                        "is_closed",
+                                        !item.is_closed,
                                       )
                                     }
-                                    className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1.5 text-xs font-medium text-slate-700 outline-none focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-100 transition cursor-pointer"
-                                  />
-                                  <span className="text-xs text-slate-400 font-semibold">
-                                    to
+                                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none ${
+                                      isBizClosed
+                                        ? "bg-slate-100 cursor-not-allowed"
+                                        : !item.is_closed
+                                        ? "bg-emerald-500"
+                                        : "bg-slate-200"
+                                    }`}
+                                  >
+                                    <span
+                                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                                        !item.is_closed && !isBizClosed
+                                          ? "translate-x-4"
+                                          : "translate-x-0"
+                                      }`}
+                                    />
+                                  </button>
+                                  <span className="text-xs font-semibold text-slate-700 select-none">
+                                    {DAYS_OF_WEEK[item.day_of_week]}
                                   </span>
-                                  <input
-                                    type="time"
-                                    value={item.close_time.slice(0, 5)}
-                                    onChange={(e) =>
-                                      updateMemberHour(
-                                        dayIdx,
-                                        "close_time",
-                                        `${e.target.value}:00`,
-                                      )
-                                    }
-                                    className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1.5 text-xs font-medium text-slate-700 outline-none focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-100 transition cursor-pointer"
-                                  />
                                 </div>
-                              ) : (
-                                <span className="text-xs text-slate-400 font-semibold italic">
-                                  Day off
-                                </span>
-                              )}
-                            </div>
-                          ))}
+
+                                {isBizClosed ? (
+                                  <span className="text-xs text-rose-500 font-semibold italic mr-2 select-none">
+                                    Store is closed
+                                  </span>
+                                ) : !item.is_closed ? (
+                                  <div className="flex items-center gap-2">
+                                    <CustomTimePicker
+                                      value={item.open_time}
+                                      minTime={bizHour ? bizHour.open_time : undefined}
+                                      maxTime={bizHour ? bizHour.close_time : undefined}
+                                      onChange={(val) =>
+                                        updateMemberHour(dayIdx, "open_time", val)
+                                      }
+                                    />
+                                    <span className="text-xs text-slate-400 font-semibold select-none">
+                                      to
+                                    </span>
+                                    <CustomTimePicker
+                                      value={item.close_time}
+                                      minTime={bizHour ? bizHour.open_time : undefined}
+                                      maxTime={bizHour ? bizHour.close_time : undefined}
+                                      onChange={(val) =>
+                                        updateMemberHour(dayIdx, "close_time", val)
+                                      }
+                                    />
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-slate-400 font-semibold italic mr-2 select-none">
+                                    Day off
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
                           <div className="flex justify-end pt-2">
                             <button
                               onClick={saveStaffHours}

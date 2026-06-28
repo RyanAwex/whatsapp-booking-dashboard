@@ -49,6 +49,8 @@ export default function RecentActivity() {
     const fetchActivities = async () => {
       setLoading(true);
       try {
+        await supabase.rpc("sync_ended_appointments", { p_business_id: business.id });
+
         // 1. Fetch latest 5 appointments
         const { data: appts } = await supabase
           .from("appointments")

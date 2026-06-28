@@ -948,3 +948,261 @@ values
   ('Starter', 'Grow your business with more capacity and CRM tools.', 15.00, 3, 15, 200, 200, false, false, false, false),
   ('Pro', 'Unlock full scheduling automation, WhatsApp tools, and analytics.', 35.00, 999, 999, 9999, 9999, true, true, true, true)
 on conflict (name) do nothing;
+
+-- ==========================================
+-- TRIGGER TO SYNC STAFF WORKING HOURS WITH BUSINESS HOURS
+-- ==========================================
+create or replace function public.sync_staff_working_hours()
+returns trigger
+language plpgsql
+security definer
+as $$
+begin
+  -- Trigger fires only when business hours are modified (staff_id is null)
+  if NEW.staff_id is null then
+    if NEW.is_closed = true then
+      -- If business is closed, close all staff availability
+      update public.working_hours
+      set 
+        is_closed = true,
+        open_time = null,
+        close_time = null
+      where business_id = NEW.business_id 
+        and day_of_week = NEW.day_of_week 
+        and staff_id is not null;
+    else
+      -- If business is open, cap staff hours to fit within the new business hours bounds
+      update public.working_hours
+      set 
+        open_time = greatest(open_time, NEW.open_time),
+        close_time = least(close_time, NEW.close_time),
+        is_closed = case 
+          when is_closed = true then true
+          when greatest(open_time, NEW.open_time) >= least(close_time, NEW.close_time) then true
+          else false
+        end
+      where business_id = NEW.business_id 
+        and day_of_week = NEW.day_of_week 
+        and staff_id is not null;
+    end if;
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists on_business_hours_updated on public.working_hours;
+create trigger on_business_hours_updated
+  after insert or update of open_time, close_time, is_closed
+  on public.working_hours
+  for each row
+  execute function public.sync_staff_working_hours();
+
+-- ==========================================
+-- TRIGGER TO CLAMP STAFF WORKING HOURS BEFORE SAVE
+-- ==========================================
+create or replace function public.clamp_staff_working_hours()
+returns trigger
+language plpgsql
+security definer
+as $$
+declare
+  biz_open time;
+  biz_close time;
+  biz_closed boolean;
+begin
+  -- If this is a staff-specific working hour row:
+  if NEW.staff_id is not null then
+    -- Find the corresponding business-level working hours
+    select open_time, close_time, is_closed 
+    into biz_open, biz_close, biz_closed
+    from public.working_hours
+    where business_id = NEW.business_id 
+      and day_of_week = NEW.day_of_week 
+      and staff_id is null
+    limit 1;
+
+    if found then
+      if biz_closed = true then
+        NEW.is_closed := true;
+        NEW.open_time := null;
+        NEW.close_time := null;
+      else
+        -- Clamp staff hours to business hours
+        if NEW.is_closed = false then
+          if NEW.open_time is not null then
+            NEW.open_time := greatest(NEW.open_time, biz_open);
+          end if;
+          if NEW.close_time is not null then
+            NEW.close_time := least(NEW.close_time, biz_close);
+          end if;
+          if NEW.open_time is not null and NEW.close_time is not null and NEW.open_time >= NEW.close_time then
+            NEW.is_closed := true;
+            NEW.open_time := null;
+            NEW.close_time := null;
+          end if;
+        end if;
+      end if;
+    end if;
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists on_staff_hours_saving on public.working_hours;
+create trigger on_staff_hours_saving
+  before insert or update of open_time, close_time, is_closed
+  on public.working_hours
+  for each row
+  execute function public.clamp_staff_working_hours();
+-- Schema Migrations:
+-- Add default_payment_method to business_settings if it doesn't exist
+alter table public.business_settings 
+add column if not exists default_payment_method text default 'cash' 
+check (default_payment_method in ('cash', 'card', 'online'));
+
+-- Add payment_method to appointments if it doesn't exist
+alter table public.appointments 
+add column if not exists payment_method text default 'cash' 
+check (payment_method in ('cash', 'card', 'online'));
+
+-- Trigger to insert a sale record automatically when an appointment is completed
+create or replace function public.auto_create_sale_on_completion()
+returns trigger
+language plpgsql
+security definer
+as $$
+declare
+  service_price numeric;
+begin
+  if NEW.status = 'completed' then
+    -- Check if a sale already exists for this appointment
+    if not exists (select 1 from public.sales where appointment_id = NEW.id) then
+      -- Get service price
+      select price into service_price from public.services where id = NEW.service_id;
+      if service_price is null then
+        service_price := 0.00;
+      end if;
+
+      -- Insert into sales
+      insert into public.sales (
+        business_id,
+        appointment_id,
+        client_id,
+        service_id,
+        staff_id,
+        payment_method,
+        status,
+        amount,
+        paid_at
+      ) values (
+        NEW.business_id,
+        NEW.id,
+        NEW.client_id,
+        NEW.service_id,
+        NEW.staff_id,
+        coalesce(NEW.payment_method, 'cash'),
+        'paid',
+        service_price,
+        coalesce(NEW.end_time, now())
+      );
+    end if;
+  elsif NEW.status = 'cancelled' then
+    -- If cancelled, mark the sale as cancelled
+    update public.sales
+    set status = 'cancelled'
+    where appointment_id = NEW.id;
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists on_appointment_status_changed on public.appointments;
+create trigger on_appointment_status_changed
+  after insert or update of status
+  on public.appointments
+  for each row
+  execute function public.auto_create_sale_on_completion();
+
+-- RPC function to sync past-ended appointments to the sales table automatically
+create or replace function public.sync_ended_appointments(p_business_id uuid)
+returns void
+language plpgsql
+security definer
+as $$
+declare
+  r record;
+  service_price numeric;
+begin
+  -- Automatically transition past confirmed appointments to 'completed' status
+  update public.appointments
+  set status = 'completed'
+  where business_id = p_business_id
+    and status = 'confirmed'
+    and end_time <= now();
+
+  -- Loop through all confirmed/completed appointments in the past that don't have a sale
+  for r in 
+    select a.id, a.business_id, a.client_id, a.service_id, a.staff_id, a.end_time, a.payment_method
+    from public.appointments a
+    left join public.sales s on s.appointment_id = a.id
+    where a.business_id = p_business_id
+      and a.status in ('confirmed', 'completed')
+      and a.end_time <= now()
+      and s.id is null
+  loop
+    -- Get price
+    select price into service_price from public.services where id = r.service_id;
+    if service_price is null then
+      service_price := 0.00;
+    end if;
+
+    -- Insert sale
+    insert into public.sales (
+      business_id,
+      appointment_id,
+      client_id,
+      service_id,
+      staff_id,
+      payment_method,
+      status,
+      amount,
+      paid_at,
+      created_at
+    ) values (
+      r.business_id,
+      r.id,
+      r.client_id,
+      r.service_id,
+      r.staff_id,
+      coalesce(r.payment_method, 'cash'),
+      'paid',
+      r.end_time,
+      r.end_time
+    );
+  end loop;
+end;
+$$;
+
+-- Trigger function to keep sales table payment method in sync with appointments table updates
+create or replace function public.sync_payment_method_to_sales()
+returns trigger
+language plpgsql
+security definer
+as $$
+begin
+  if OLD.payment_method is distinct from NEW.payment_method then
+    update public.sales
+    set payment_method = NEW.payment_method
+    where appointment_id = NEW.id;
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists on_appointment_payment_method_changed on public.appointments;
+create trigger on_appointment_payment_method_changed
+  after update of payment_method
+  on public.appointments
+  for each row
+  execute function public.sync_payment_method_to_sales();
+

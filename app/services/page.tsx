@@ -428,6 +428,57 @@ export default function ServicesPage() {
         />
       </div>
 
+      {/* Categories & Services Overview */}
+      {!loading && categories.length > 0 && (
+        <div className="mb-8">
+          <h3 className="text-xs font-bold text-slate-450 uppercase tracking-widest mb-4">
+            Categories & Services Overview
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {categories.map((cat) => {
+              const catServices = services.filter((s) => s.category_id === cat.id);
+              return (
+                <div
+                  key={cat.id}
+                  className="rounded-2xl border border-slate-200/80 bg-white/70 p-4.5 shadow-[0_8px_20px_-6px_rgba(15,23,42,0.06)] backdrop-blur-sm flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="size-7 bg-indigo-50 text-indigo-650 rounded-lg flex items-center justify-center">
+                        <Tag className="size-3.5" />
+                      </div>
+                      <h4 className="font-extrabold text-sm text-slate-900 truncate">
+                        {cat.name}
+                      </h4>
+                    </div>
+                    {catServices.length > 0 ? (
+                      <ul className="space-y-1.5 pl-1">
+                        {catServices.map((s) => (
+                          <li key={s.id} className="text-xs text-slate-655 flex items-center gap-2">
+                            <span className="size-1 bg-indigo-500 rounded-full shrink-0" />
+                            <span className="truncate font-medium">{s.name}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-xs text-slate-455 italic pl-1">
+                        No services listed
+                      </p>
+                    )}
+                  </div>
+                  <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    <span>Total Services</span>
+                    <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-extrabold">
+                      {catServices.length}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Services Grid */}
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20 text-slate-450">

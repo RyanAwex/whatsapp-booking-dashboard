@@ -27,11 +27,13 @@ interface Appointment {
   timeRange: string;
   price: string;
   status: string;
-  colorTheme: "pink" | "blue" | "purple" | "green";
+  colorTheme: "pink" | "blue" | "purple" | "green" | "amber" | "cyan";
   notes: string;
   dayIndex: number; // 0 = Mon, 6 = Sun
   startMinute: number; // minutes from 8 AM
   durationMinutes: number;
+  rawDate: Date;
+  payment_method: string;
 }
 
 const parseLocalDate = (dateStr: string): Date => {
@@ -55,16 +57,16 @@ export default function CalendarPage() {
   const [selectedApt, setSelectedApt] = useState<Appointment | null>(null);
   const [selectedStaffFilter, setSelectedStaffFilter] = useState<string>("all");
   const [selectedServiceFilter, setSelectedServiceFilter] = useState<string>("all");
-  const [currentWeekOffset, setCurrentWeekOffset] = useState<number>(0);
+  const [viewType, setViewType] = useState<"week" | "day">("week");
+  const [focusedDate, setFocusedDate] = useState<Date>(new Date());
 
-  // Helper to calculate weekly dates dynamically based on offset (timezone-naive)
-  const getWeekDays = React.useCallback((offset: number) => {
-    const today = new Date();
+  // Helper to calculate weekly dates dynamically based on focusedDate (timezone-naive)
+  const getWeekDays = React.useCallback((baseDate: Date) => {
+    const today = new Date(baseDate);
     const day = today.getDay();
-    // Monday of current week
+    // Monday of focusedDate week
     const diff = today.getDate() - day + (day === 0 ? -6 : 1);
     const monday = new Date(today.setDate(diff));
-    monday.setDate(monday.getDate() + offset * 7);
 
     const weekDaysList = [];
     for (let i = 0; i < 7; i++) {
@@ -75,7 +77,7 @@ export default function CalendarPage() {
     return weekDaysList;
   }, []);
 
-  const weekDays = React.useMemo(() => getWeekDays(currentWeekOffset), [currentWeekOffset, getWeekDays]);
+  const weekDays = React.useMemo(() => getWeekDays(focusedDate), [focusedDate, getWeekDays]);
 
   // Fetch appointments and filters
   useEffect(() => {
@@ -111,21 +113,28 @@ export default function CalendarPage() {
           clients: { name: string; tag: string | null } | null;
           services: { name: string; price: number } | null;
           staff: { id: string; name: string } | null;
+          payment_method?: string;
         }
 
-        // 3. Define local ISO Range for selected week (timezone-naive)
-        const today = new Date();
-        const day = today.getDay();
-        const diff = today.getDate() - day + (day === 0 ? -6 : 1);
-        const monday = new Date(today.setDate(diff));
-        monday.setDate(monday.getDate() + currentWeekOffset * 7);
+        // 3. Define local ISO Range for selected week or day (timezone-naive)
+        const startOfWeek = new Date(focusedDate);
+        const endOfWeek = new Date(focusedDate);
 
-        const startOfWeek = new Date(monday);
-        startOfWeek.setHours(0, 0, 0, 0);
+        if (viewType === "week") {
+          const day = focusedDate.getDay();
+          const diff = focusedDate.getDate() - day + (day === 0 ? -6 : 1);
+          const monday = new Date(focusedDate);
+          monday.setDate(diff);
+          startOfWeek.setTime(monday.getTime());
+          startOfWeek.setHours(0, 0, 0, 0);
 
-        const endOfWeek = new Date(monday);
-        endOfWeek.setDate(monday.getDate() + 6);
-        endOfWeek.setHours(23, 59, 59, 999);
+          endOfWeek.setTime(monday.getTime());
+          endOfWeek.setDate(monday.getDate() + 6);
+          endOfWeek.setHours(23, 59, 59, 999);
+        } else {
+          startOfWeek.setHours(0, 0, 0, 0);
+          endOfWeek.setHours(23, 59, 59, 999);
+        }
 
         const formatLocalISO = (d: Date) => {
           const y = d.getFullYear();
@@ -151,7 +160,8 @@ export default function CalendarPage() {
             notes,
             clients(name, tag),
             services(name, price),
-            staff(id, name)
+            staff(id, name),
+            payment_method
           `)
           .eq("business_id", business.id)
           .gte("start_time", startQueryStr)
@@ -190,15 +200,17 @@ export default function CalendarPage() {
               year: "numeric",
             });
 
-            // Cycle themes based on status
-            const themes: Record<string, "pink" | "blue" | "purple" | "green"> = {
-              pending: "pink",
-              confirmed: "blue",
-              completed: "green",
-              no_show: "purple",
-              cancelled: "pink",
-            };
-            const colorTheme = themes[a.status] || "blue";
+            // Assign a consistent, unique background color theme based on the appointment ID hash
+            const colorsList: ("pink" | "blue" | "purple" | "green" | "amber" | "cyan")[] = [
+              "blue",
+              "purple",
+              "green",
+              "pink",
+              "amber",
+              "cyan",
+            ];
+            const charSum = a.id.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+            const colorTheme = colorsList[charSum % colorsList.length];
 
             return {
               id: a.id,
@@ -215,6 +227,8 @@ export default function CalendarPage() {
               dayIndex,
               startMinute,
               durationMinutes,
+              rawDate: start,
+              payment_method: a.payment_method || "cash",
             };
           });
 
@@ -235,7 +249,7 @@ export default function CalendarPage() {
     };
 
     loadCalendar();
-  }, [business, currentWeekOffset, settings]);
+  }, [business, focusedDate, viewType, settings]);
 
   // Filter appointments
   const filteredAppointments = appointments.filter((apt) => {
@@ -248,60 +262,113 @@ export default function CalendarPage() {
     return staffMatch && serviceMatch;
   });
 
-  // Calculate layout configuration for cards, with dynamic stacking when overlapping
-  const getAptLayout = (apt: Appointment, dayApts: Appointment[]) => {
-    const overlaps = dayApts.filter(
-      (other) =>
-        other.id !== apt.id &&
-        apt.startMinute < other.startMinute + other.durationMinutes &&
-        other.startMinute < apt.startMinute + apt.durationMinutes
-    );
+  // Calculate layout configuration for cards, splitting columns for overlapping appointments
+  const getDayAptsLayout = React.useCallback((dayApts: Appointment[]) => {
+    // Sort appointments by start time, then duration
+    const sorted = [...dayApts].sort((a, b) => {
+      if (a.startMinute !== b.startMinute) return a.startMinute - b.startMinute;
+      return b.durationMinutes - a.durationMinutes;
+    });
 
-    // Assume 10-hour day from 8 AM to 6 PM (600 minutes total)
-    const topPercent = Math.max(0, (apt.startMinute / 600) * 100);
-    const heightPercent = Math.min(100 - topPercent, (apt.durationMinutes / 600) * 100);
+    const columns: Appointment[][] = []; // columns[colIndex] = array of appointments in that column
+    const aptToCol: Record<string, number> = {};
 
-    if (overlaps.length === 0) {
+    for (const apt of sorted) {
+      let placed = false;
+      for (let c = 0; c < columns.length; c++) {
+        // Check if apt overlaps with any appointment already in column c
+        const hasOverlap = columns[c].some((other) => {
+          return (
+            apt.startMinute < other.startMinute + other.durationMinutes &&
+            other.startMinute < apt.startMinute + apt.durationMinutes
+          );
+        });
+        if (!hasOverlap) {
+          columns[c].push(apt);
+          aptToCol[apt.id] = c;
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        columns.push([apt]);
+        aptToCol[apt.id] = columns.length - 1;
+      }
+    }
+
+    // Group overlapping appointments into clusters to find the max columns in each cluster
+    const clusters: Set<string>[] = [];
+    for (const apt of sorted) {
+      const matchingClusterIndices: number[] = [];
+      clusters.forEach((cluster, idx) => {
+        const overlapsWithCluster = Array.from(cluster).some((otherId) => {
+          const other = sorted.find((o) => o.id === otherId);
+          if (!other) return false;
+          return (
+            apt.startMinute < other.startMinute + other.durationMinutes &&
+            other.startMinute < apt.startMinute + apt.durationMinutes
+          );
+        });
+        if (overlapsWithCluster) {
+          matchingClusterIndices.push(idx);
+        }
+      });
+
+      if (matchingClusterIndices.length === 0) {
+        const newCluster = new Set<string>();
+        newCluster.add(apt.id);
+        clusters.push(newCluster);
+      } else if (matchingClusterIndices.length === 1) {
+        clusters[matchingClusterIndices[0]].add(apt.id);
+      } else {
+        const mergedCluster = new Set<string>();
+        mergedCluster.add(apt.id);
+        matchingClusterIndices.reverse().forEach((idx) => {
+          const [removed] = clusters.splice(idx, 1);
+          removed.forEach((id) => mergedCluster.add(id));
+        });
+        clusters.push(mergedCluster);
+      }
+    }
+
+    // Map each appointment to its layout style
+    const layouts: Record<string, { style: React.CSSProperties; className: string; isCompact: boolean }> = {};
+    for (const apt of sorted) {
+      const cluster = clusters.find((c) => c.has(apt.id));
+      const clusterApts = cluster ? Array.from(cluster) : [apt.id];
+      
+      const colsInCluster = new Set(clusterApts.map((id) => aptToCol[id]));
+      const maxCols = colsInCluster.size;
+      
+      const sortedCols = Array.from(colsInCluster).sort((a, b) => a - b);
+      const colIndex = sortedCols.indexOf(aptToCol[apt.id]);
+
+      const topPercent = Math.max(0, (apt.startMinute / 600) * 100);
+      const heightPercent = Math.min(100 - topPercent, (apt.durationMinutes / 600) * 100);
+
+      const widthPercent = 100 / maxCols;
+      const leftPercent = colIndex * widthPercent;
+
       const isSelected = selectedApt?.id === apt.id;
-      return {
+
+      layouts[apt.id] = {
+        isCompact: viewType === "week" && maxCols > 1,
         style: {
-          top: `${topPercent}%`,
-          height: `${heightPercent}%`,
-          left: "4px",
-          right: "4px",
+          top: `calc(${topPercent}% + 2px)`,
+          height: `calc(${heightPercent}% - 4px)`,
+          left: `calc(${leftPercent}% + 2px)`,
+          width: `calc(${widthPercent}% - 4px)`,
         },
-        className: `z-10 absolute rounded-xl p-2.5 text-left border flex flex-col justify-between transition-all duration-200 ${
-          isSelected ? "z-25 border-indigo-650 shadow-md ring-1 ring-indigo-500/20" : "border-slate-200/80 shadow-sm"
+        className: `absolute rounded-xl p-1 text-left border flex flex-col justify-between transition-all duration-200 overflow-hidden ${
+          isSelected
+            ? "z-30 border-indigo-650 shadow-md ring-1 ring-indigo-500/20 scale-[1.01]"
+            : "z-10 border-slate-200/80 shadow-sm hover:z-20 hover:scale-[1.005]"
         }`,
       };
     }
 
-    const isThisSelected = selectedApt?.id === apt.id;
-    const isAnyOverlapSelected = overlaps.some((other) => selectedApt?.id === other.id);
-
-    let isInFront = false;
-    if (isThisSelected) {
-      isInFront = true;
-    } else if (!isAnyOverlapSelected) {
-      const sortedIds = [apt.id, ...overlaps.map((o) => o.id)].sort();
-      isInFront = sortedIds[0] === apt.id;
-    }
-
-    return {
-      style: {
-        top: `${topPercent}%`,
-        height: `${heightPercent}%`,
-        left: isInFront ? "12px" : "4px",
-        right: isInFront ? "4px" : "12px",
-        transform: isInFront ? "scale(1.01)" : "scale(0.97)",
-      },
-      className: `absolute rounded-xl p-2.5 text-left border flex flex-col justify-between transition-all duration-200 ${
-        isInFront
-          ? "z-20 border-indigo-650 shadow-md ring-1 ring-indigo-500/20"
-          : "z-10 border-slate-200/80 shadow-sm opacity-80"
-      }`,
-    };
-  };
+    return layouts;
+  }, [selectedApt, viewType]);
 
   const handleUpdateStatus = async (apptId: string, nextStatus: string) => {
     setUpdatingStatus(true);
@@ -322,12 +389,7 @@ export default function CalendarPage() {
             ? {
                 ...a,
                 status: nextStatus,
-                colorTheme:
-                  nextStatus.toLowerCase() === "completed"
-                    ? "green"
-                    : nextStatus.toLowerCase() === "no_show"
-                    ? "purple"
-                    : "blue",
+                colorTheme: a.colorTheme,
               }
             : a
         )
@@ -340,12 +402,7 @@ export default function CalendarPage() {
             ? {
                 ...prev,
                 status: nextStatus,
-                colorTheme:
-                  nextStatus.toLowerCase() === "completed"
-                    ? "green"
-                    : nextStatus.toLowerCase() === "no_show"
-                    ? "purple"
-                    : "blue",
+                colorTheme: prev.colorTheme,
               }
             : null
         );
@@ -353,6 +410,49 @@ export default function CalendarPage() {
     } catch (err) {
       console.error(err);
       setErrorMsg("Failed to update appointment status.");
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
+  const handleUpdatePaymentMethod = async (apptId: string, nextMethod: string) => {
+    setUpdatingStatus(true);
+    setErrorMsg(null);
+
+    try {
+      const { error } = await supabase
+        .from("appointments")
+        .update({ payment_method: nextMethod.toLowerCase() })
+        .eq("id", apptId);
+
+      if (error) throw error;
+
+      // Update state local list
+      setAppointments(
+        appointments.map((a) =>
+          a.id === apptId
+            ? {
+                ...a,
+                payment_method: nextMethod,
+              }
+            : a
+        )
+      );
+
+      // Update active selection detail
+      if (selectedApt?.id === apptId) {
+        setSelectedApt((prev) =>
+          prev
+            ? {
+                ...prev,
+                payment_method: nextMethod,
+              }
+            : null
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Failed to update payment method.");
     } finally {
       setUpdatingStatus(false);
     }
@@ -382,14 +482,23 @@ export default function CalendarPage() {
   };
 
   const getDateRangeLabel = () => {
-    const options: Intl.DateTimeFormatOptions = {
-      month: "short",
-      day: "numeric",
-    };
-    return `${weekDays[0].toLocaleDateString("en-US", options)} - ${weekDays[6].toLocaleDateString(
-      "en-US",
-      { ...options, year: "numeric" }
-    )}`;
+    if (viewType === "week") {
+      const options: Intl.DateTimeFormatOptions = {
+        month: "short",
+        day: "numeric",
+      };
+      return `${weekDays[0].toLocaleDateString("en-US", options)} - ${weekDays[6].toLocaleDateString(
+        "en-US",
+        { ...options, year: "numeric" }
+      )}`;
+    } else {
+      return focusedDate.toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
   };
 
   // Generate 8 AM - 6 PM times for grid lines
@@ -411,9 +520,33 @@ export default function CalendarPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {/* View type selector */}
+          <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+            <button
+              onClick={() => setViewType("week")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 cursor-pointer ${
+                viewType === "week"
+                  ? "bg-[#0f294a] text-white shadow-sm"
+                  : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+              }`}
+            >
+              Week
+            </button>
+            <button
+              onClick={() => setViewType("day")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 cursor-pointer ${
+                viewType === "day"
+                  ? "bg-[#0f294a] text-white shadow-sm"
+                  : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+              }`}
+            >
+              Day
+            </button>
+          </div>
+
           <button
             onClick={() => {
-              setCurrentWeekOffset(0);
+              setFocusedDate(new Date());
               setSelectedStaffFilter("all");
               setSelectedServiceFilter("all");
             }}
@@ -425,9 +558,15 @@ export default function CalendarPage() {
           {/* Nav buttons */}
           <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-1 shadow-sm">
             <button
-              onClick={() => setCurrentWeekOffset((prev) => prev - 1)}
+              onClick={() => {
+                setFocusedDate((prev) => {
+                  const next = new Date(prev);
+                  next.setDate(prev.getDate() - (viewType === "week" ? 7 : 1));
+                  return next;
+                });
+              }}
               className="flex size-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 active:scale-95 cursor-pointer"
-              aria-label="Previous Week"
+              aria-label={viewType === "week" ? "Previous Week" : "Previous Day"}
             >
               <ChevronLeft className="size-4" />
             </button>
@@ -435,9 +574,15 @@ export default function CalendarPage() {
               {getDateRangeLabel()}
             </span>
             <button
-              onClick={() => setCurrentWeekOffset((prev) => prev + 1)}
+              onClick={() => {
+                setFocusedDate((prev) => {
+                  const next = new Date(prev);
+                  next.setDate(prev.getDate() + (viewType === "week" ? 7 : 1));
+                  return next;
+                });
+              }}
               className="flex size-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 active:scale-95 cursor-pointer"
-              aria-label="Next Week"
+              aria-label={viewType === "week" ? "Next Week" : "Next Day"}
             >
               <ChevronRight className="size-4" />
             </button>
@@ -499,21 +644,39 @@ export default function CalendarPage() {
               <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
                 Time
               </div>
-              {weekDays.map((day, idx) => {
-                const isToday = day.toDateString() === new Date().toDateString();
-                return (
-                  <div key={idx} className="flex flex-col items-center">
-                    <span className={`text-[10px] uppercase font-bold tracking-widest ${isToday ? "text-indigo-600 font-extrabold" : "text-slate-450"}`}>
-                      {day.toLocaleDateString("en-US", { weekday: "short" })}
-                    </span>
-                    <span className={`text-base font-extrabold mt-0.5 rounded-full flex items-center justify-center size-7.5 ${
-                      isToday ? "bg-indigo-600 text-white shadow-md shadow-indigo-650/15" : "text-slate-800"
-                    }`}>
-                      {day.getDate()}
-                    </span>
-                  </div>
-                );
-              })}
+              {viewType === "week" ? (
+                weekDays.map((day, idx) => {
+                  const isToday = day.toDateString() === new Date().toDateString();
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => {
+                        setFocusedDate(day);
+                        setViewType("day");
+                      }}
+                      className="flex flex-col items-center cursor-pointer hover:bg-slate-50 rounded-xl py-1 transition active:scale-95"
+                    >
+                      <span className={`text-[10px] uppercase font-bold tracking-widest ${isToday ? "text-indigo-600 font-extrabold" : "text-slate-450"}`}>
+                        {day.toLocaleDateString("en-US", { weekday: "short" })}
+                      </span>
+                      <span className={`text-base font-extrabold mt-0.5 rounded-full flex items-center justify-center size-7.5 ${
+                        isToday ? "bg-indigo-600 text-white shadow-md shadow-indigo-650/15" : "text-slate-800"
+                      }`}>
+                        {day.getDate()}
+                      </span>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="col-span-7 flex flex-col items-center justify-center py-1">
+                  <span className="text-[10px] uppercase font-extrabold tracking-widest text-indigo-600">
+                    {focusedDate.toLocaleDateString("en-US", { weekday: "long" })}
+                  </span>
+                  <span className="text-sm font-extrabold mt-0.5 text-slate-800 tracking-tight">
+                    {focusedDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Time slot lines & cards */}
@@ -536,10 +699,17 @@ export default function CalendarPage() {
                 </div>
 
                 {/* Day Columns */}
-                {Array.from({ length: 7 }, (_, dayIdx) => {
-                  const dayApts = filteredAppointments.filter((a) => a.dayIndex === dayIdx);
+                {(viewType === "week" ? weekDays : [focusedDate]).map((day, idx) => {
+                  const dayApts = filteredAppointments.filter((a) => a.rawDate.toDateString() === day.toDateString());
+                  const layouts = getDayAptsLayout(dayApts);
+
                   return (
-                    <div key={dayIdx} className="relative border-r border-slate-100/50 h-full">
+                    <div
+                      key={idx}
+                      className={`relative border-r border-slate-100/50 h-full ${
+                        viewType === "day" ? "col-span-7" : ""
+                      }`}
+                    >
                       {/* Render line dividers internally */}
                       {Array.from({ length: 9 }, (_, lineIdx) => (
                         <div
@@ -551,7 +721,8 @@ export default function CalendarPage() {
 
                       {/* Display Appointment cards */}
                       {dayApts.map((appt) => {
-                        const layout = getAptLayout(appt, dayApts);
+                        const layout = layouts[appt.id];
+                        if (!layout) return null;
                         const isSelected = selectedApt?.id === appt.id;
 
                         // Theme classes
@@ -568,30 +739,38 @@ export default function CalendarPage() {
                           green: isSelected
                             ? "bg-emerald-600 text-white border-emerald-700"
                             : "bg-emerald-50/50 text-emerald-800 border-emerald-100 hover:bg-white",
+                          amber: isSelected
+                            ? "bg-amber-500 text-white border-amber-600"
+                            : "bg-amber-50/50 text-amber-900 border-amber-100 hover:bg-white",
+                          cyan: isSelected
+                            ? "bg-cyan-500 text-white border-cyan-600"
+                            : "bg-cyan-50/50 text-cyan-900 border-cyan-100 hover:bg-white",
                         };
-
-                        const badgeColor = isSelected
-                          ? "bg-white/20 text-white"
-                          : "bg-white border text-slate-500 border-slate-200/60";
 
                         return (
                           <button
                             key={appt.id}
                             style={layout.style}
                             onClick={() => setSelectedApt(appt)}
-                            className={`${layout.className} ${themeClasses[appt.colorTheme]}`}
+                            className={`${layout.className} ${themeClasses[appt.colorTheme]} ${
+                              layout.isCompact ? "justify-center items-center" : ""
+                            }`}
+                            title={`${appt.clientName} - ${appt.service} (${appt.staff})`}
                           >
-                            <div className="min-w-0">
-                              <h4 className="text-[11px] font-bold truncate leading-tight">
-                                {appt.clientName}
-                              </h4>
-                              <p className="text-[9px] truncate font-medium mt-0.5 opacity-90">
-                                {appt.service}
-                              </p>
-                            </div>
-                            <span className={`text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md mt-1 w-fit select-none ${badgeColor}`}>
-                              {appt.staff.split(" ")[0]}
-                            </span>
+                            {layout.isCompact ? (
+                              <span className="text-[9px] font-extrabold truncate w-full text-center px-1 select-none uppercase tracking-wide opacity-90 leading-none">
+                                {appt.status.replace("_", " ")}
+                              </span>
+                            ) : (
+                              <div className="min-w-0">
+                                <h4 className="text-[11px] font-bold truncate leading-tight">
+                                  {appt.clientName}
+                                </h4>
+                                <p className="text-[9px] truncate font-medium mt-0.5 opacity-90">
+                                  {appt.service}
+                                </p>
+                              </div>
+                            )}
                           </button>
                         );
                       })}
@@ -694,6 +873,32 @@ export default function CalendarPage() {
                           }`}
                         >
                           {st.replace("_", " ")}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Payment Method editor */}
+                <div className="border-t border-slate-100 mt-5 pt-4">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                    Payment Method
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {["cash", "card", "online"].map((pm) => {
+                      const isCurrent = selectedApt.payment_method?.toLowerCase() === pm.toLowerCase();
+                      return (
+                        <button
+                          key={pm}
+                          disabled={updatingStatus}
+                          onClick={() => handleUpdatePaymentMethod(selectedApt.id, pm)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border capitalize transition cursor-pointer ${
+                            isCurrent
+                              ? "bg-slate-900 border-slate-900 text-white shadow-sm"
+                              : "bg-white border-slate-200 text-slate-655 hover:bg-slate-50"
+                          }`}
+                        >
+                          {pm}
                         </button>
                       );
                     })}

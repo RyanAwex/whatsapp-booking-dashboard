@@ -73,6 +73,9 @@ export default function SalesPage() {
     setErrorMsg(null);
 
     try {
+      // Sync past-ended appointments to the sales table before loading
+      await supabase.rpc("sync_ended_appointments", { p_business_id: business.id });
+
       // 1. Fetch Clients for dropdown
       const { data: clients } = await supabase
         .from("clients")

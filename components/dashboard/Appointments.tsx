@@ -31,13 +31,14 @@ export default function Appointments() {
           .select(`
             id,
             start_time,
+            created_at,
             clients(name),
             services(name),
             staff(name)
           `)
           .eq("business_id", business.id)
           .gte("start_time", now)
-          .order("start_time", { ascending: true })
+          .order("created_at", { ascending: false })
           .limit(5);
 
         if (error) throw error;
