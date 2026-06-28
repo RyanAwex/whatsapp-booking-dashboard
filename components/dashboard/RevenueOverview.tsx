@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import { Loader2 } from "lucide-react";
 import CustomSelect from "./CustomSelect";
+import { getCurrencySymbol } from "@/lib/constants";
 
 interface ChartData {
   day: string;
@@ -21,7 +22,7 @@ interface ChartData {
 }
 
 export default function RevenueOverview() {
-  const { business } = useAuth();
+  const { business, settings } = useAuth();
   const [data, setData] = useState<ChartData[]>([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<"week" | "month" | "year">("week");
@@ -228,7 +229,7 @@ export default function RevenueOverview() {
 
               <YAxis
                 domain={[0, yDomainMax]}
-                tickFormatter={(value) => `$${value}`}
+                tickFormatter={(value) => `${getCurrencySymbol(settings?.currency)}${value}`}
                 axisLine={false}
                 tickLine={false}
                 tick={{ fill: "#374151", fontSize: 11, fontWeight: 600 }}
@@ -237,7 +238,7 @@ export default function RevenueOverview() {
 
               <Tooltip
                 formatter={(value) => [
-                  `$${Number(value).toFixed(2)}`,
+                  `${getCurrencySymbol(settings?.currency)}${Number(value).toFixed(2)}`,
                   "Revenue",
                 ]}
               />

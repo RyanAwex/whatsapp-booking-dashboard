@@ -327,7 +327,7 @@ export default function Hero() {
 
   return (
     <section className="mb-8 flex flex-col gap-5">
-      <div className="relative z-30 flex flex-col gap-4 rounded-[28px] border border-slate-200/80 bg-white/80 p-5 shadow-[0_20px_20px_-24px_rgba(15,23,42,0.35)] backdrop-blur sm:flex-row sm:items-end sm:justify-between sm:p-6">
+      <div className="relative z-20 flex flex-col gap-4 rounded-[28px] border border-slate-200/80 bg-white/80 p-5 shadow-[0_20px_20px_-24px_rgba(15,23,42,0.35)] backdrop-blur sm:flex-row sm:items-end sm:justify-between sm:p-6">
         <div className="space-y-2">
           <div className="inline-flex w-fit items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
             Operations overview

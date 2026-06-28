@@ -243,6 +243,24 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     }
   }, [user, profile, business, subscription, loading, pathname, router]);
 
+  // Automatically sync past-ended appointments to completed status in the background
+  useEffect(() => {
+    if (!business?.id) return;
+
+    const runSync = async () => {
+      try {
+        await supabase.rpc("sync_ended_appointments", { p_business_id: business.id });
+      } catch (err) {
+        console.error("Auto sync error:", err);
+      }
+    };
+
+    runSync();
+    // Run every 30 seconds to keep past appointments updated in real-time
+    const interval = setInterval(runSync, 30000);
+    return () => clearInterval(interval);
+  }, [business?.id]);
+
   const signOut = async () => {
     await supabase.auth.signOut();
     router.push("/auth");

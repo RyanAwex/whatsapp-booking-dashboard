@@ -867,22 +867,35 @@ export default function ControlCenterPage() {
       <div className="rounded-[28px] border border-slate-200/80 bg-white/90 p-6 shadow-[0_20px_45px_-28px_rgba(15,23,42,0.35)] backdrop-blur min-h-[480px]">
         {/* TAB 1: Business Info */}
         {activeTab === "Business Info" && (
-          <div className="max-w-xl">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="size-10 bg-slate-900 text-white rounded-xl flex items-center justify-center shadow-lg shadow-slate-900/10">
-                <Building className="size-5" />
+          <div>
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div className="flex items-center gap-3">
+                <div className="size-10 bg-slate-900 text-white rounded-xl flex items-center justify-center shadow-lg shadow-slate-900/10">
+                  <Building className="size-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">
+                    Business Profile
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Manage settings for your shop storefront.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">
-                  Business Profile
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Manage settings for your shop storefront.
-                </p>
-              </div>
+              <button
+                onClick={handleSaveProfile}
+                disabled={saving}
+                className="shrink-0 rounded-xl bg-[#0f294a] text-white px-5 py-2.5 text-sm font-semibold transition hover:bg-slate-800 hover:scale-[1.02] active:scale-98 cursor-pointer shadow-lg shadow-[#0f294a]/10 flex items-center gap-1.5"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Save Profile & Settings"
+                )}
+              </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="max-w-xl space-y-4">
               <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 select-none">
                   Business Name
@@ -1032,36 +1045,38 @@ export default function ControlCenterPage() {
                 </div>
               </div>
 
-              <button
-                onClick={handleSaveProfile}
-                disabled={saving}
-                className="rounded-xl bg-[#0f294a] text-white px-5 py-2.5 text-sm font-semibold transition hover:bg-slate-800 hover:scale-[1.02] active:scale-98 cursor-pointer shadow-lg shadow-[#0f294a]/10 flex items-center gap-1.5"
-              >
-                {saving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  "Save Profile & Settings"
-                )}
-              </button>
             </div>
           </div>
         )}
 
         {/* TAB 2: Working Hours */}
         {activeTab === "Working Hours" && (
-          <div className="max-w-2xl">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="size-10 bg-slate-900 text-white rounded-xl flex items-center justify-center shadow-lg shadow-slate-900/10">
-                <CalendarClock className="size-5" />
+          <div>
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div className="flex items-center gap-3">
+                <div className="size-10 bg-slate-900 text-white rounded-xl flex items-center justify-center shadow-lg shadow-slate-900/10">
+                  <CalendarClock className="size-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">
+                    Working Hours
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Configure your shop weekly availability hours.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">
-                  Working Hours
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Configure your shop weekly availability hours.
-                </p>
-              </div>
+              <button
+                onClick={handleSaveHours}
+                disabled={saving}
+                className="shrink-0 rounded-xl bg-[#0f294a] text-white px-5 py-2.5 text-sm font-semibold transition hover:bg-slate-800 hover:scale-[1.02] active:scale-98 cursor-pointer shadow-lg shadow-[#0f294a]/10 flex items-center gap-1.5"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Save Hours"
+                )}
+              </button>
             </div>
 
             {loadingHours ? (
@@ -1122,19 +1137,6 @@ export default function ControlCenterPage() {
                   </div>
                 ))}
 
-                <div className="pt-2">
-                  <button
-                    onClick={handleSaveHours}
-                    disabled={saving}
-                    className="rounded-xl bg-[#0f294a] text-white px-5 py-2.5 text-sm font-semibold transition hover:bg-slate-800 hover:scale-[1.02] active:scale-98 cursor-pointer shadow-lg shadow-[#0f294a]/10 flex items-center gap-1.5"
-                  >
-                    {saving ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      "Save Hours"
-                    )}
-                  </button>
-                </div>
               </div>
             )}
           </div>

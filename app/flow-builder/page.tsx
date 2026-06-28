@@ -2,30 +2,19 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import {
-  RefreshCw,
   Zap,
   MessageSquare,
   Calendar,
   Scissors,
   MapPin,
   ExternalLink,
-  ChevronLeft,
-  Video,
-  Phone,
-  MoreVertical,
-  Wifi,
-  Battery,
   Edit,
-  Smile,
-  Paperclip,
-  Camera,
-  Mic,
-  ArrowRight,
-  X,
   Plus,
   Trash2,
-  Undo2,
-  CheckCheck,
+  CheckCircle2,
+  Save,
+  Play,
+  X,
 } from "lucide-react";
 
 // Flow Node Interface
@@ -44,20 +33,13 @@ interface FlowNode {
   iconName: "trigger" | "message" | "link" | "services" | "location";
 }
 
-// Chat Message Interface for Phone Simulation
-interface ChatMessage {
-  id: string;
-  sender: "bot" | "user";
-  text: string;
-  time: string;
-  type?: "text" | "options" | "list" | "link";
-  options?: string[];
-  listItems?: string[];
-  linkUrl?: string;
-}
-
 export default function FlowBuilderPage() {
-  // 1. Initial State for all conversation flow nodes
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [activePath, setActivePath] = useState<
+    "booking" | "services" | "location" | null
+  >(null);
+
+  // Flow Nodes state
   const [nodes, setNodes] = useState<Record<string, FlowNode>>({
     trigger: {
       id: "trigger",
@@ -83,7 +65,7 @@ export default function FlowBuilderPage() {
       title: "Reply: Appointment Link",
       type: "message",
       text: "Sure! Let's get you scheduled. Click the link below to visit our booking page and select your slot:",
-      link: "http://localhost:3000/book",
+      link: "https://bookly.com/book",
       iconName: "link",
     },
     services: {
@@ -105,19 +87,14 @@ export default function FlowBuilderPage() {
       id: "location",
       title: "Reply: Location Info",
       type: "message",
-      text: "We are located at:\n📍 123 Beauty Lane, Salon Suite 100, New York, NY 10001\n\nWe look forward to seeing you!",
+      text: "We are located at:\n📍 123 Beauty Lane, Suite 100, New York, NY 10001\n\nWe look forward to seeing you!",
       iconName: "location",
     },
   });
 
-  // 2. State variables for popups and path tracking
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
-  const [activePath, setActivePath] = useState<
-    "booking" | "services" | "location" | null
-  >(null);
-  const [hoveredOptionId, setHoveredOptionId] = useState<string | null>(null);
 
-  // Temp editing states (used inside modal popup)
+  // Inspector form states
   const [tempText, setTempText] = useState("");
   const [tempLink, setTempLink] = useState("");
   const [tempOptions, setTempOptions] = useState<
@@ -126,145 +103,15 @@ export default function FlowBuilderPage() {
   const [tempItems, setTempItems] = useState<string[]>([]);
   const [newItemText, setNewItemText] = useState("");
 
-  // 3. WhatsApp Chat Simulation Engine States
-  const msgCounterRef = useRef(0);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => [
-    {
-      id: "msg-init",
-      sender: "user",
-      text: "Hi Salon",
-      time: "10:00 AM",
-    },
-    {
-      id: "msg-greeting",
-      sender: "bot",
-      text: "Hello! Welcome to Bookly Salon assistant. 🤖\n\nWhat would you like to do today? Please choose an option below:",
-      time: "10:00 AM",
-      type: "options",
-      options: ["Book appointment", "View services", "Location"],
-    },
-  ]);
-  const [isTyping, setIsTyping] = useState(false);
-  const [selectedSimOption, setSelectedSimOption] = useState<string | null>(
-    null,
-  );
-  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState({
+    triggerToGreeting: "",
+    opt1ToBooking: "",
+    opt2ToServices: "",
+    opt3ToLocation: "",
+  });
 
-  // Initialize and Reset WhatsApp Simulation
-  const handleResetSimulation = () => {
-    setSelectedSimOption(null);
-    setIsTyping(false);
-    setActivePath(null);
-    msgCounterRef.current = 0;
-    setChatMessages([
-      {
-        id: "msg-init",
-        sender: "user",
-        text: nodes.trigger.text,
-        time: "10:00 AM",
-      },
-      {
-        id: "msg-greeting",
-        sender: "bot",
-        text: nodes.greeting.text,
-        time: "10:00 AM",
-        type: "options",
-        options: nodes.greeting.options?.map((o) => o.text) || [],
-      },
-    ]);
-  };
-
-  // Keep chat scrolled to bottom
-  useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop =
-        chatContainerRef.current.scrollHeight;
-    }
-  }, [chatMessages, isTyping]);
-
-  // Handle simulation option button click inside phone mockup
-  const handleSimOptionClick = (optionText: string, targetId: string) => {
-    if (isTyping || selectedSimOption) return;
-
-    setSelectedSimOption(optionText);
-    setActivePath(targetId as "booking" | "services" | "location" | null);
-
-    // 1. Add user reply message
-    msgCounterRef.current += 1;
-    const userMsg: ChatMessage = {
-      id: `user-${msgCounterRef.current}`,
-      sender: "user",
-      text: optionText,
-      time: "10:01 AM",
-    };
-
-    setChatMessages((prev) => [...prev, userMsg]);
-    setIsTyping(true);
-
-    // 2. Simulate bot typing delay (900ms)
-    setTimeout(() => {
-      setIsTyping(false);
-      msgCounterRef.current += 1;
-
-      let botMsg: ChatMessage;
-
-      if (targetId === "booking") {
-        botMsg = {
-          id: `bot-booking-${msgCounterRef.current}`,
-          sender: "bot",
-          text: nodes.booking.text,
-          time: "10:02 AM",
-          type: "link",
-          linkUrl: nodes.booking.link,
-        };
-      } else if (targetId === "services") {
-        botMsg = {
-          id: `bot-services-${msgCounterRef.current}`,
-          sender: "bot",
-          text: nodes.services.text,
-          time: "10:02 AM",
-          type: "list",
-          listItems: nodes.services.items || [],
-        };
-      } else {
-        botMsg = {
-          id: `bot-location-${msgCounterRef.current}`,
-          sender: "bot",
-          text: nodes.location.text,
-          time: "10:02 AM",
-          type: "text",
-        };
-      }
-
-      setChatMessages((prev) => [...prev, botMsg]);
-    }, 900);
-  };
-
-  // Helper back button to return to greeting list in phone mockup
-  const handleBackToMenu = () => {
-    setSelectedSimOption(null);
-    setActivePath(null);
-    setIsTyping(false);
-    setChatMessages([
-      {
-        id: "msg-init",
-        sender: "user",
-        text: nodes.trigger.text,
-        time: "10:00 AM",
-      },
-      {
-        id: "msg-greeting",
-        sender: "bot",
-        text: nodes.greeting.text,
-        time: "10:00 AM",
-        type: "options",
-        options: nodes.greeting.options?.map((o) => o.text) || [],
-      },
-    ]);
-  };
-
-  // 4. Node editing modal functions
-  const openEditModal = (nodeId: string) => {
+  const openInspector = (nodeId: string) => {
     const node = nodes[nodeId];
     setEditingNodeId(nodeId);
     setTempText(node.text);
@@ -277,46 +124,69 @@ export default function FlowBuilderPage() {
   const handleSaveNodeChanges = () => {
     if (!editingNodeId) return;
 
-    setNodes((prev) => {
-      const updatedNodes = {
-        ...prev,
-        [editingNodeId]: {
-          ...prev[editingNodeId],
-          text: tempText,
-          link: tempLink || undefined,
-          options: tempOptions.length > 0 ? tempOptions : undefined,
-          items: tempItems.length > 0 ? tempItems : undefined,
-        },
-      };
-
-      // Reset simulation with the updated nodes directly inside the event handler
-      setSelectedSimOption(null);
-      setIsTyping(false);
-      setActivePath(null);
-      setChatMessages([
-        {
-          id: "msg-init",
-          sender: "user",
-          text: updatedNodes.trigger.text,
-          time: "10:00 AM",
-        },
-        {
-          id: "msg-greeting",
-          sender: "bot",
-          text: updatedNodes.greeting.text,
-          time: "10:00 AM",
-          type: "options",
-          options: updatedNodes.greeting.options?.map((o) => o.text) || [],
-        },
-      ]);
-
-      return updatedNodes;
-    });
+    setNodes((prev) => ({
+      ...prev,
+      [editingNodeId]: {
+        ...prev[editingNodeId],
+        text: tempText,
+        link: tempLink || undefined,
+        options: tempOptions.length > 0 ? tempOptions : undefined,
+        items: tempItems.length > 0 ? tempItems : undefined,
+      },
+    }));
 
     setEditingNodeId(null);
   };
 
-  // Helper render for Node Icons
+  const handleSaveFlow = () => {
+    setSaveSuccess(true);
+    setTimeout(() => {
+      setSaveSuccess(false);
+    }, 2500);
+  };
+
+  // Helper to recalculate relative coordinates of sockets inside canvas
+  const updateConnectorCoords = React.useCallback(() => {
+    const getSocketCenter = (id: string) => {
+      const el = document.getElementById(id);
+      const canvasEl = canvasRef.current;
+      if (!el || !canvasEl) return { x: 0, y: 0 };
+      const elRect = el.getBoundingClientRect();
+      const canvasRect = canvasEl.getBoundingClientRect();
+      return {
+        x: elRect.left - canvasRect.left + elRect.width / 2,
+        y: elRect.top - canvasRect.top + elRect.height / 2,
+      };
+    };
+
+    const triggerOut = getSocketCenter("socket-trigger-out");
+    const greetingIn = getSocketCenter("socket-greeting-in");
+    const opt1Out = getSocketCenter("socket-booking-out");
+    const opt2Out = getSocketCenter("socket-services-out");
+    const opt3Out = getSocketCenter("socket-location-out");
+    const bookingIn = getSocketCenter("socket-booking-in");
+    const servicesIn = getSocketCenter("socket-services-in");
+    const locationIn = getSocketCenter("socket-location-in");
+
+    setCoords({
+      triggerToGreeting: `M ${triggerOut.x} ${triggerOut.y} L ${greetingIn.x} ${greetingIn.y}`,
+      opt1ToBooking: `M ${opt1Out.x} ${opt1Out.y} C ${(opt1Out.x + bookingIn.x) / 2} ${opt1Out.y}, ${(opt1Out.x + bookingIn.x) / 2} ${bookingIn.y}, ${bookingIn.x} ${bookingIn.y}`,
+      opt2ToServices: `M ${opt2Out.x} ${opt2Out.y} C ${(opt2Out.x + servicesIn.x) / 2} ${opt2Out.y}, ${(opt2Out.x + servicesIn.x) / 2} ${servicesIn.y}, ${servicesIn.x} ${servicesIn.y}`,
+      opt3ToLocation: `M ${opt3Out.x} ${opt3Out.y} C ${(opt3Out.x + locationIn.x) / 2} ${opt3Out.y}, ${(opt3Out.x + locationIn.x) / 2} ${locationIn.y}, ${locationIn.x} ${locationIn.y}`,
+    });
+  }, []);
+
+  // Update whenever nodes or resize occurs
+  useEffect(() => {
+    updateConnectorCoords();
+    window.addEventListener("resize", updateConnectorCoords);
+    const t = setTimeout(updateConnectorCoords, 150);
+    return () => {
+      window.removeEventListener("resize", updateConnectorCoords);
+      clearTimeout(t);
+    };
+  }, [nodes, editingNodeId, updateConnectorCoords]);
+
   const getNodeIcon = (iconName: string, className: string = "size-4") => {
     switch (iconName) {
       case "trigger":
@@ -335,824 +205,521 @@ export default function FlowBuilderPage() {
   };
 
   return (
-    <main className="w-full flex flex-col mt-2 text-slate-800 pb-6">
-      {/* Custom Styles Injection */}
+    <div className="h-[calc(100vh-140px)] flex flex-col font-sans text-slate-800">
+      {/* CSS Dotted Grid Styles */}
       <style
         dangerouslySetInnerHTML={{
           __html: `
-        .active-path-glow {
-          stroke: #10b981 !important;
-          stroke-width: 3.5px !important;
-        }
-        .whatsapp-wallpaper-solid {
-          background-color: #eae6df;
-        }
-        @keyframes pulseDot {
-          0%, 100% { opacity: 0.3; transform: scale(0.8); }
-          50% { opacity: 1; transform: scale(1.2); }
-        }
-        .typing-dot {
-          animation: pulseDot 1.4s infinite ease-in-out;
-        }
-        .typing-dot:nth-child(2) {
-          animation-delay: 0.2s;
-        }
-        .typing-dot:nth-child(3) {
-          animation-delay: 0.4s;
+        .dotted-bg {
+          background-image: radial-gradient(#cbd5e1 1.2px, transparent 0);
+          background-size: 16px 16px;
         }
       `,
         }}
       />
 
-      {/* Title & Toolbar section */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between shrink-0">
+      {/* Header bar */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between shrink-0 mb-4 select-none">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
             Flow Builder
           </h1>
-          <p className="text-sm text-slate-500 mt-1.5">
-            Customize and test client conversation flows that run automatically
-            on WhatsApp.
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+            Map out customer automated reply paths for WhatsApp incoming
+            messages.
           </p>
         </div>
 
-        <button
-          onClick={handleResetSimulation}
-          className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-750 shadow-sm transition hover:bg-slate-50 hover:scale-[1.02] active:scale-95 cursor-pointer"
-        >
-          Reset Simulation
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs font-bold shadow-sm">
+            <span className="size-2 bg-emerald-500 rounded-full animate-pulse" />
+            Live
+          </span>
+
+          <button
+            onClick={handleSaveFlow}
+            className="flex items-center gap-2 rounded-xl bg-[#0f294a] px-4.5 py-2 text-xs sm:text-sm font-semibold text-white shadow-lg shadow-[#0f294a]/10 hover:bg-slate-800 transition active:scale-95 cursor-pointer"
+          >
+            <Save className="size-4" /> Save Flow
+          </button>
+        </div>
       </div>
 
-      {/* Main Flex Layout (Stretches to fill available viewport height) */}
-      <div className="flex flex-col xl:flex-row gap-6 items-stretch flex-1 min-h-0 pb-4">
-        {/* Left Column: Visual Flowchart Canvas Card */}
-        <div className="flex-1 flex flex-col rounded-[28px] border border-slate-200/80 bg-white/90 p-5 shadow-[0_20px_45px_-28px_rgba(15,23,42,0.35)] backdrop-blur h-[580px] xl:h-[650px] min-h-0">
-          <div className="border-b border-slate-100 pb-4 mb-4 flex items-center justify-between shrink-0">
-            <div>
-              <h2 className="text-xl font-semibold text-slate-900">
-                Conversation Flow Chart
-              </h2>
-              <p className="text-sm text-slate-500 mt-1">
-                Click a node&apos;s edit icon to configure details. Click
-                options in greeting to test simulator.
-              </p>
-            </div>
+      {/* Save Success Alert Banner */}
+      {saveSuccess && (
+        <div className="mb-4 rounded-xl bg-emerald-50 border border-emerald-200/60 p-3.5 text-emerald-850 flex items-center gap-2.5 text-xs sm:text-sm font-semibold shadow-sm animate-in fade-in slide-in-from-top-1 duration-200 shrink-0">
+          <CheckCircle2 className="size-4.5 text-emerald-600" />
+          <span>
+            All flow builder changes successfully synchronized with the WhatsApp
+            router!
+          </span>
+        </div>
+      )}
 
-            <div className="text-xs text-slate-500 flex items-center gap-3 font-medium select-none">
-              <span className="flex items-center gap-1.5">
-                <span className="size-2.5 rounded-full bg-slate-200 border border-slate-300 inline-block"></span>
-                Inactive Path
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="size-2.5 rounded-full bg-emerald-500 inline-block"></span>
-                Active Flow
-              </span>
-            </div>
+      {/* Main Flow Editor Layout */}
+      <div className="flex-1 flex gap-6 min-h-0 overflow-hidden relative">
+        {/* CENTER COLUMN: Responsive Canvas Workspace */}
+        <div
+          ref={canvasRef}
+          id="flow-canvas-container"
+          className="flex-1 border border-slate-200 bg-slate-50/50 rounded-3xl overflow-hidden relative flex flex-col shadow-inner h-full z-10"
+        >
+          <div className="absolute top-4 left-4 z-20 flex items-center gap-2 bg-white/95 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm text-xs font-semibold text-slate-600 select-none">
+            <span className="size-2 bg-indigo-500 rounded-full animate-ping" />
+            Interactive Flow Canvas
           </div>
 
-          <div className="flex-1 w-full overflow-auto scrollbar bg-slate-50/50 rounded-2xl border border-slate-200/80 relative min-h-0 p-4">
-            {/* Whiteboard Board - dynamically stretches, but sets a min-width matching the nodes to prevent overlap */}
-            <div className="w-full min-w-[630px] h-[580px] relative bg-[radial-gradient(#e2e8f0_1.5px,transparent_1.5px)] [background-size:20px_20px] bg-white select-none shrink-0 rounded-2xl border border-slate-200/50 shadow-[inset_0_2px_8px_rgba(15,23,42,0.02)]">
-              {/* SVG Connector Lines */}
-              <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
-                <defs>
-                  <marker
-                    id="arrow"
-                    viewBox="0 0 10 10"
-                    refX="7"
-                    refY="5"
-                    markerWidth="5"
-                    markerHeight="5"
-                    orient="auto-start-reverse"
-                  >
-                    <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#cbd5e1" />
-                  </marker>
-                  <marker
-                    id="arrow-active"
-                    viewBox="0 0 10 10"
-                    refX="7"
-                    refY="5"
-                    markerWidth="5"
-                    markerHeight="5"
-                    orient="auto-start-reverse"
-                  >
-                    <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#10b981" />
-                  </marker>
-                </defs>
+          {/* SVG CONNECTOR LINES */}
+          <svg className="absolute inset-0 pointer-events-none w-full h-full z-0">
+            <path
+              d={coords.triggerToGreeting}
+              stroke="#6366f1"
+              strokeWidth="2.5"
+              fill="none"
+            />
+            <path
+              d={coords.opt1ToBooking}
+              stroke={activePath === "booking" ? "#10b981" : "#cbd5e1"}
+              strokeWidth={activePath === "booking" ? "3" : "2"}
+              fill="none"
+              className="transition-all duration-300"
+            />
+            <path
+              d={coords.opt2ToServices}
+              stroke={activePath === "services" ? "#10b981" : "#cbd5e1"}
+              strokeWidth={activePath === "services" ? "3" : "2"}
+              fill="none"
+              className="transition-all duration-300"
+            />
+            <path
+              d={coords.opt3ToLocation}
+              stroke={activePath === "location" ? "#10b981" : "#cbd5e1"}
+              strokeWidth={activePath === "location" ? "3" : "2"}
+              fill="none"
+              className="transition-all duration-300"
+            />
+          </svg>
 
-                {/* 1. Trigger Output (140, 130) -> Greeting Input (140, 160) - Straight down line */}
-                <path
-                  d="M 140 130 L 140 160"
-                  fill="none"
-                  className="stroke-slate-200 transition-all duration-300"
-                  strokeWidth="2"
-                  strokeDasharray="4 4"
-                  markerEnd="url(#arrow)"
-                />
-
-                {/* 2. Option 1 (260, 315) -> Booking Response Input (340, 97) */}
-                <path
-                  d="M 260 315 C 305 315, 305 97, 340 97"
-                  fill="none"
-                  className={`stroke-slate-200 transition-all duration-300 ${
-                    activePath === "booking" || hoveredOptionId === "opt-1"
-                      ? "active-path-glow"
-                      : ""
-                  }`}
-                  strokeWidth="2"
-                  markerEnd={
-                    activePath === "booking" || hoveredOptionId === "opt-1"
-                      ? "url(#arrow-active)"
-                      : "url(#arrow)"
-                  }
-                />
-
-                {/* 3. Option 2 (260, 365) -> Services Response Input (340, 300) */}
-                <path
-                  d="M 260 365 C 305 365, 305 300, 340 300"
-                  fill="none"
-                  className={`stroke-slate-200 transition-all duration-300 ${
-                    activePath === "services" || hoveredOptionId === "opt-2"
-                      ? "active-path-glow"
-                      : ""
-                  }`}
-                  strokeWidth="2"
-                  markerEnd={
-                    activePath === "services" || hoveredOptionId === "opt-2"
-                      ? "url(#arrow-active)"
-                      : "url(#arrow)"
-                  }
-                />
-
-                {/* 4. Option 3 (260, 415) -> Location Response Input (340, 492) */}
-                <path
-                  d="M 260 415 C 305 415, 305 492, 340 492"
-                  fill="none"
-                  className={`stroke-slate-200 transition-all duration-300 ${
-                    activePath === "location" || hoveredOptionId === "opt-3"
-                      ? "active-path-glow"
-                      : ""
-                  }`}
-                  strokeWidth="2"
-                  markerEnd={
-                    activePath === "location" || hoveredOptionId === "opt-3"
-                      ? "url(#arrow-active)"
-                      : "url(#arrow)"
-                  }
-                />
-              </svg>
-
-              {/* COLUMN 1: CONTROLS & MAIN FLOW */}
-
-              {/* CARD 1: TRIGGER NODE */}
-              <div className="absolute left-[20px] top-[15px] w-[240px] bg-white/95 border border-slate-200 rounded-2xl p-4 shadow-[0_4px_20px_rgba(15,23,42,0.04)] hover:border-slate-350 hover:shadow-[0_8px_25px_rgba(15,23,42,0.08)] transition duration-200">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 mb-2.5">
-                  <div className="flex items-center gap-1.5">
-                    <span className="p-1 rounded-lg bg-indigo-50 flex items-center justify-center">
-                      {getNodeIcon(nodes.trigger.iconName, "size-4")}
-                    </span>
-                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                      Trigger
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => openEditModal("trigger")}
-                    className="p-1.5 text-slate-400 hover:text-slate-900 transition rounded-lg hover:bg-slate-50 cursor-pointer border border-transparent hover:border-slate-200"
-                  >
-                    <Edit className="size-3.5" />
-                  </button>
-                </div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 select-none">
-                  When client sends:
-                </p>
-                <div className="bg-slate-50 rounded-xl px-3 py-2 border border-slate-200/60 text-sm font-semibold text-slate-700 italic shadow-inner">
-                  &quot;{nodes.trigger.text}&quot;
-                </div>
-
-                {/* Connection output point (Bottom Center) */}
-                <div className="absolute bottom-[-5px] left-1/2 -translate-x-1/2 size-2.5 bg-slate-300 border border-white rounded-full shadow-sm"></div>
-              </div>
-
-              {/* CARD 2: GREETING & MENU NODE */}
-              <div className="absolute left-[20px] top-[160px] w-[240px] h-[395px] bg-white/95 border border-slate-200 rounded-2xl p-4 shadow-[0_4px_20px_rgba(15,23,42,0.04)] hover:border-slate-350 hover:shadow-[0_8px_25px_rgba(15,23,42,0.08)] transition duration-200 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 mb-2.5">
-                    <div className="flex items-center gap-1.5">
-                      <span className="p-1 rounded-lg bg-emerald-50 flex items-center justify-center">
-                        {getNodeIcon(nodes.greeting.iconName, "size-4")}
-                      </span>
-                      <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                        Greeting Menu
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => openEditModal("greeting")}
-                      className="p-1.5 text-slate-400 hover:text-slate-900 transition rounded-lg hover:bg-slate-50 cursor-pointer border border-transparent hover:border-slate-200"
-                    >
-                      <Edit className="size-3.5" />
-                    </button>
-                  </div>
-
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 select-none">
-                    Greeting message:
-                  </p>
-                  <div className="bg-slate-50 rounded-xl px-3 py-2.5 border border-slate-200/60 text-sm font-medium text-slate-655 leading-relaxed max-h-[105px] overflow-y-auto mb-3 scrollbar shadow-inner">
-                    {nodes.greeting.text}
-                  </div>
-                </div>
-
-                <div className="space-y-2 mt-2">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1 select-none">
-                    Interactive options (Click to test)
-                  </span>
-                  {nodes.greeting.options?.map((opt) => (
-                    <div
-                      key={opt.id}
-                      onMouseEnter={() => setHoveredOptionId(opt.id)}
-                      onMouseLeave={() => setHoveredOptionId(null)}
-                      onClick={() =>
-                        handleSimOptionClick(opt.text, opt.targetNodeId)
-                      }
-                      className={`group/opt w-full flex items-center justify-between bg-white border border-slate-200/80 hover:border-emerald-500 hover:bg-emerald-50/5 rounded-xl px-3 py-2 text-xs text-slate-700 transition duration-200 cursor-pointer shadow-sm ${
-                        activePath === opt.targetNodeId ||
-                        hoveredOptionId === opt.id
-                          ? "border-emerald-400 bg-emerald-50/30 text-emerald-800 ring-1 ring-emerald-500/20"
-                          : ""
-                      }`}
-                      title={`Click to test '${opt.text}' in simulator`}
-                    >
-                      <span className="font-semibold text-xs">{opt.text}</span>
-                      <ArrowRight className="size-3.5 text-slate-400 group-hover/opt:translate-x-0.5 transition" />
-                    </div>
-                  ))}
-                </div>
-
-                {/* Connection points (Top Center input, Right Edge outputs) */}
-                <div className="absolute top-[-5px] left-1/2 -translate-x-1/2 size-2.5 bg-slate-350 border border-white rounded-full shadow-sm"></div>
-
-                <div className="absolute right-[-5px] top-0 bottom-0 pointer-events-none w-2.5">
-                  <div
-                    style={{ top: "155px" }}
-                    className={`absolute right-0 size-2.5 border border-white rounded-full shadow-sm ${activePath === "booking" || hoveredOptionId === "opt-1" ? "bg-emerald-500" : "bg-slate-300"}`}
-                  ></div>
-                  <div
-                    style={{ top: "205px" }}
-                    className={`absolute right-0 size-2.5 border border-white rounded-full shadow-sm ${activePath === "services" || hoveredOptionId === "opt-2" ? "bg-emerald-500" : "bg-slate-300"}`}
-                  ></div>
-                  <div
-                    style={{ top: "255px" }}
-                    className={`absolute right-0 size-2.5 border border-white rounded-full shadow-sm ${activePath === "location" || hoveredOptionId === "opt-3" ? "bg-emerald-500" : "bg-slate-300"}`}
-                  ></div>
-                </div>
-              </div>
-
-              {/* COLUMN 2: THREE LEAF ACTION NODES */}
-
-              {/* CARD 3A: BOOKING URL RESPONSE */}
+          {/* Dotted Grid Layout for Column Cards */}
+          <div className="w-full h-full dotted-bg p-6 grid grid-cols-1 md:grid-cols-3 gap-6 items-center z-10 overflow-y-auto md:overflow-hidden select-none">
+            {/* COLUMN 1: Trigger Card */}
+            <div className="flex justify-center items-center">
               <div
-                className={`absolute left-[350px] top-[15px] w-[260px] h-[155px] bg-white/95 border border-slate-200 rounded-2xl p-4 shadow-[0_4px_20px_rgba(15,23,42,0.04)] hover:border-slate-350 hover:shadow-[0_8px_25px_rgba(15,23,42,0.08)] transition duration-200 flex flex-col justify-between ${
-                  activePath === "booking" || hoveredOptionId === "opt-1"
-                    ? "border-emerald-500 shadow-[0_8px_30px_rgba(16,185,129,0.06)] scale-[1.01]"
-                    : ""
+                className={`w-full max-w-[250px] bg-white rounded-2xl border p-4 flex flex-col justify-between shadow-sm transition hover:shadow-md cursor-pointer relative ${
+                  editingNodeId === "trigger"
+                    ? "border-indigo-500 ring-2 ring-indigo-100"
+                    : "border-slate-200"
                 }`}
+                onClick={() => openInspector("trigger")}
+              >
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    {getNodeIcon(nodes.trigger.iconName)}
+                    <span className="text-[10px] font-bold text-slate-800 uppercase tracking-wider">
+                      Trigger Message
+                    </span>
+                  </div>
+                  <Edit className="size-3.5 text-slate-400" />
+                </div>
+                <div className="text-xs font-semibold text-slate-500 mt-2">
+                  Client texts:
+                  <div className="mt-1 bg-slate-50 border border-slate-100 rounded-lg p-2 text-slate-800 font-extrabold truncate">
+                    &quot;{nodes.trigger.text}&quot;
+                  </div>
+                </div>
+
+                {/* Connection output point socket */}
+                <div
+                  id="socket-trigger-out"
+                  className="absolute right-[-4px] top-1/2 -translate-y-1/2 size-2 bg-indigo-500 border border-white rounded-full shadow-sm"
+                />
+              </div>
+            </div>
+
+            {/* COLUMN 2: Greeting Router Card */}
+            <div className="flex justify-center items-center">
+              <div
+                className={`w-full max-w-[260px] h-[320px] bg-white rounded-2xl border p-4 flex flex-col justify-between shadow-sm transition hover:shadow-md cursor-pointer relative ${
+                  editingNodeId === "greeting"
+                    ? "border-indigo-500 ring-2 ring-indigo-100"
+                    : "border-slate-200"
+                }`}
+                onClick={() => openInspector("greeting")}
+              >
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    {getNodeIcon(nodes.greeting.iconName)}
+                    <span className="text-[10px] font-bold text-slate-800 uppercase tracking-wider">
+                      Greeting & Menu
+                    </span>
+                  </div>
+                  <Edit className="size-3.5 text-slate-400" />
+                </div>
+
+                <div className="text-[11px] text-slate-550 leading-relaxed line-clamp-4 mt-2">
+                  {nodes.greeting.text}
+                </div>
+
+                {/* Interactive Menu Sockets */}
+                <div className="space-y-2 mt-3 flex-1 flex flex-col justify-end">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block">
+                    Outgoing Paths
+                  </span>
+
+                  {nodes.greeting.options?.map((opt) => {
+                    const isHovered = activePath === opt.targetNodeId;
+                    const pathName = opt.targetNodeId as
+                      | "booking"
+                      | "services"
+                      | "location";
+
+                    return (
+                      <div
+                        key={opt.id}
+                        onMouseEnter={() => setActivePath(pathName)}
+                        onMouseLeave={() => setActivePath(null)}
+                        className={`relative flex items-center justify-between p-2 rounded-xl border text-[11px] font-bold transition ${
+                          isHovered
+                            ? "border-emerald-500 bg-emerald-50/40 text-emerald-800"
+                            : "border-slate-150 bg-slate-50 text-slate-700 hover:border-slate-300"
+                        }`}
+                      >
+                        <span className="truncate">{opt.text}</span>
+                        <Play className="size-3 text-slate-400 shrink-0" />
+
+                        {/* Connection Dot socket on Right */}
+                        <div
+                          id={`socket-${opt.targetNodeId}-out`}
+                          className={`absolute right-[-20px] size-2 border border-white rounded-full shadow-sm z-10 transition-colors ${
+                            isHovered ? "bg-emerald-500" : "bg-slate-300"
+                          }`}
+                          style={{ top: "12px" }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Connection Input Point socket */}
+                <div
+                  id="socket-greeting-in"
+                  className="absolute left-[-5px] top-1/2 -translate-y-1/2 size-2 bg-indigo-500 border border-white rounded-full shadow-sm"
+                />
+              </div>
+            </div>
+
+            {/* COLUMN 3: Outcome Action Cards Stack */}
+            <div className="flex flex-col gap-4 justify-center h-full max-h-[580px]">
+              {/* Card 3A: Booking outcome */}
+              <div
+                className={`w-full max-w-[250px] h-[140px] bg-white rounded-2xl border p-3 flex flex-col justify-between shadow-sm transition hover:shadow-md cursor-pointer relative mx-auto ${
+                  editingNodeId === "booking"
+                    ? "border-indigo-500 ring-2 ring-indigo-100"
+                    : activePath === "booking"
+                      ? "border-emerald-500 shadow-md shadow-emerald-50"
+                      : "border-slate-200"
+                }`}
+                onClick={() => openInspector("booking")}
               >
                 <div>
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 mb-2">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 mb-1.5">
                     <div className="flex items-center gap-1.5">
-                      <span className="p-1 rounded-lg bg-rose-50 flex items-center justify-center">
-                        {getNodeIcon(nodes.booking.iconName, "size-4")}
-                      </span>
-                      <span className="text-sm font-bold text-slate-800 uppercase tracking-wider">
+                      {getNodeIcon(nodes.booking.iconName)}
+                      <span className="text-[10px] font-bold text-slate-800 uppercase tracking-wider">
                         Reply: Booking Link
                       </span>
                     </div>
-                    <button
-                      onClick={() => openEditModal("booking")}
-                      className="p-1.5 text-slate-400 hover:text-slate-900 transition rounded-lg hover:bg-slate-50 cursor-pointer border border-transparent hover:border-slate-200"
-                    >
-                      <Edit className="size-3.5" />
-                    </button>
+                    <Edit className="size-3.5 text-slate-400" />
                   </div>
-
-                  <div className="text-sm text-slate-600 leading-relaxed max-h-[55px] overflow-y-auto scrollbar">
+                  <p className="text-[10px] text-slate-550 leading-normal line-clamp-3">
                     {nodes.booking.text}
-                  </div>
+                  </p>
                 </div>
-
-                <div className="flex items-center gap-1.5 text-xs bg-rose-50/55 border border-rose-100 text-rose-700 font-bold px-2.5 py-1.5 rounded-xl truncate mt-1">
-                  <ExternalLink className="size-3.5 shrink-0" />
+                <div className="flex items-center gap-1.5 text-[9px] bg-rose-50 border border-rose-100 text-rose-700 font-bold px-2 py-1 rounded-lg truncate mt-1">
+                  <ExternalLink className="size-3 shrink-0" />
                   {nodes.booking.link}
                 </div>
 
-                {/* Connection input point */}
+                {/* Connection Input point socket */}
                 <div
-                  className={`absolute left-[-5px] top-[82px] size-2.5 border border-white rounded-full shadow-sm ${
-                    activePath === "booking" || hoveredOptionId === "opt-1"
-                      ? "bg-emerald-500"
-                      : "bg-slate-300"
+                  id="socket-booking-in"
+                  className={`absolute left-[-5px] top-1/2 -translate-y-1/2 size-2 border border-white rounded-full shadow-sm transition-colors ${
+                    activePath === "booking" ? "bg-emerald-500" : "bg-slate-300"
                   }`}
-                ></div>
+                />
               </div>
 
-              {/* CARD 3B: SERVICES CATALOG RESPONSE */}
+              {/* Card 3B: Services Catalog outcome */}
               <div
-                className={`absolute left-[350px] top-[190px] w-[260px] h-[210px] bg-white/95 border border-slate-200 rounded-2xl p-4 shadow-[0_4px_20px_rgba(15,23,42,0.04)] hover:border-slate-350 hover:shadow-[0_8px_25px_rgba(15,23,42,0.08)] transition duration-200 flex flex-col justify-between ${
-                  activePath === "services" || hoveredOptionId === "opt-2"
-                    ? "border-emerald-500 shadow-[0_8px_30px_rgba(16,185,129,0.06)] scale-[1.01]"
-                    : ""
+                className={`w-full max-w-[250px] h-[210px] bg-white rounded-2xl border p-3.5 flex flex-col justify-between shadow-sm transition hover:shadow-md cursor-pointer relative mx-auto ${
+                  editingNodeId === "services"
+                    ? "border-indigo-500 ring-2 ring-indigo-100"
+                    : activePath === "services"
+                      ? "border-emerald-500 shadow-md shadow-emerald-50"
+                      : "border-slate-200"
                 }`}
+                onClick={() => openInspector("services")}
               >
                 <div>
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 mb-2.5">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 mb-1.5">
                     <div className="flex items-center gap-1.5">
-                      <span className="p-1 rounded-lg bg-cyan-50 flex items-center justify-center">
-                        {getNodeIcon(nodes.services.iconName, "size-4")}
-                      </span>
-                      <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                        Reply: Services Catalog
+                      {getNodeIcon(nodes.services.iconName)}
+                      <span className="text-[10px] font-bold text-slate-800 uppercase tracking-wider">
+                        Reply: Services List
                       </span>
                     </div>
-                    <button
-                      onClick={() => openEditModal("services")}
-                      className="p-1.5 text-slate-400 hover:text-slate-900 transition rounded-lg hover:bg-slate-50 cursor-pointer border border-transparent hover:border-slate-200"
-                    >
-                      <Edit className="size-3.5" />
-                    </button>
+                    <Edit className="size-3.5 text-slate-400" />
                   </div>
-
-                  <div className="text-sm text-slate-655 leading-relaxed max-h-[50px] overflow-y-auto scrollbar mb-2">
+                  <p className="text-[10px] text-slate-550 leading-normal line-clamp-2">
                     {nodes.services.text}
-                  </div>
+                  </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-1.5 max-h-[75px] overflow-y-auto scrollbar pr-1">
+                <div className="grid grid-cols-2 gap-1 max-h-[85px] overflow-y-auto scrollbar pr-1">
                   {nodes.services.items?.map((service, idx) => (
                     <div
                       key={idx}
-                      className="bg-slate-55 border border-slate-200/60 text-xs font-semibold text-slate-600 px-2 py-1.5 rounded-xl truncate flex items-center gap-1.5 shadow-sm"
+                      className="bg-slate-50 border border-slate-150 text-[10px] font-semibold text-slate-600 px-2 py-1.5 rounded-lg truncate flex items-center gap-1"
                     >
-                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0"></span>
+                      <span className="w-1 h-1 rounded-full bg-cyan-400 shrink-0" />
                       {service}
                     </div>
                   ))}
                 </div>
 
-                {/* Connection input point */}
+                {/* Connection Input point socket */}
                 <div
-                  className={`absolute left-[-5px] top-[105px] size-2.5 border border-white rounded-full shadow-sm ${
-                    activePath === "services" || hoveredOptionId === "opt-2"
+                  id="socket-services-in"
+                  className={`absolute left-[-5px] top-1/2 -translate-y-1/2 size-2 border border-white rounded-full shadow-sm transition-colors ${
+                    activePath === "services"
                       ? "bg-emerald-500"
                       : "bg-slate-300"
                   }`}
-                ></div>
-              </div>
-
-              {/* CARD 3C: LOCATION DETAILS RESPONSE */}
-              <div
-                className={`absolute left-[350px] top-[420px] w-[260px] h-[145px] bg-white/95 border border-slate-200 rounded-2xl p-4 shadow-[0_4px_20px_rgba(15,23,42,0.04)] hover:border-slate-350 hover:shadow-[0_8px_25px_rgba(15,23,42,0.08)] transition duration-200 flex flex-col justify-between ${
-                  activePath === "location" || hoveredOptionId === "opt-3"
-                    ? "border-emerald-500 shadow-[0_8px_30px_rgba(16,185,129,0.06)] scale-[1.01]"
-                    : ""
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 mb-2.5">
-                    <div className="flex items-center gap-1.5">
-                      <span className="p-1 rounded-lg bg-purple-50 flex items-center justify-center">
-                        {getNodeIcon(nodes.location.iconName, "size-4")}
-                      </span>
-                      <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                        Reply: Location Address
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => openEditModal("location")}
-                      className="p-1.5 text-slate-400 hover:text-slate-900 transition rounded-lg hover:bg-slate-50 cursor-pointer border border-transparent hover:border-slate-200"
-                    >
-                      <Edit className="size-3.5" />
-                    </button>
-                  </div>
-
-                  <div className="text-sm text-slate-600 leading-relaxed max-h-[70px] overflow-y-auto scrollbar whitespace-pre-line">
-                    {nodes.location.text}
-                  </div>
-                </div>
-
-                {/* Connection input point */}
-                <div
-                  className={`absolute left-[-5px] top-[72px] size-2.5 border border-white rounded-full shadow-sm ${
-                    activePath === "location" || hoveredOptionId === "opt-3"
-                      ? "bg-emerald-500"
-                      : "bg-slate-300"
-                  }`}
-                ></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: WhatsApp Simulator Card */}
-        <div className="w-full xl:w-[280px] shrink-0 flex flex-col rounded-[28px] border border-slate-200/80 bg-white/90 p-5 shadow-[0_20px_45px_-28px_rgba(15,23,42,0.35)] backdrop-blur h-[550px] xl:h-[650px] min-h-0">
-          <div className="border-b border-slate-100 pb-4 mb-4 flex items-center justify-between shrink-0">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">
-                Simulator
-              </h2>
-              <p className="text-xs text-slate-550 mt-1">
-                Test client conversation routes.
-              </p>
-            </div>
-
-            <button
-              onClick={handleResetSimulation}
-              className="p-1.5 hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition rounded-lg cursor-pointer border border-slate-200"
-              title="Restart Simulator"
-            >
-              <RefreshCw className="size-3.5" />
-            </button>
-          </div>
-          {/* Smartphone Chassis Container (No scrollbar outside phone chassis) */}
-          <div className="flex-1 flex items-center justify-center p-1 bg-slate-50/50 rounded-2xl select-none overflow-hidden min-h-0">
-            {/* Phone Body Mockup - Compact (235px width x 470px height) */}
-            <div className="relative w-[235px] h-[470px] rounded-[45px] border-[5px] border-slate-900 bg-slate-950 flex flex-col shrink-0 shadow-[0_25px_60px_-15px_rgba(15,23,42,0.35)]">
-              {/* Phone Lock Button Decor */}
-              <div className="absolute right-[-6px] top-20 w-[3px] h-10 bg-slate-900 rounded-r-md z-0" />
-              {/* Phone Volume Buttons Decor */}
-              <div className="absolute left-[-6px] top-16 w-[3px] h-8 bg-slate-900 rounded-l-md z-0" />
-              <div className="absolute left-[-6px] top-26 w-[3px] h-8 bg-slate-900 rounded-l-md z-0" />
-
-              {/* Screen Content Wrapper (handles overflow clipping and border-radius matching phone shape) */}
-              <div className="w-full h-full rounded-[42px] overflow-hidden flex flex-col relative z-10">
-                {/* Camera Punch Hole - Centered Dynamic Island Decor */}
-                <div className="absolute top-2 left-1/2 -translate-x-1/2 w-14 h-4 bg-black rounded-full z-50 flex items-center justify-end px-2">
-                  <span className="size-1.5 bg-[#1a1a1a] rounded-full"></span>
-                </div>
-
-                {/* High-Fidelity Phone Status Bar */}
-                <div className="bg-[#008069] text-white pt-2.5 pb-1 h-7 px-4 flex items-center justify-between text-[11px] font-semibold z-40 select-none relative">
-                  <span className="w-10 text-left">10:10</span>
-                  <div className="w-10 flex items-center justify-end gap-1">
-                    <Wifi className="size-2.5" />
-                    <div className="flex items-center gap-0.5">
-                      <Battery className="size-3 fill-white" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* WhatsApp App Profile Bar */}
-                <div className="bg-[#008069] text-white pb-2.5 pt-0.5 px-2 flex items-center justify-between z-35 shadow-sm">
-                  <div className="flex items-center gap-1">
-                    <ChevronLeft className="size-4 text-white cursor-pointer hover:bg-emerald-800 rounded-full" />
-                    <div className="relative">
-                      <div className="size-6.5 rounded-full bg-[#128c7e] text-white flex items-center justify-center font-bold text-[11px] shadow-sm border border-emerald-400/20">
-                        BS
-                      </div>
-                      <div className="absolute bottom-0 right-0 size-1 rounded-full bg-emerald-400 border-[1px] border-[#008069]"></div>
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-bold leading-tight tracking-wide">
-                        Bookly Salon
-                      </h4>
-                      <span className="text-[10px] text-emerald-255 block leading-none">
-                        {isTyping ? "typing..." : "online"}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 text-white/90">
-                    <Video className="size-3 cursor-pointer hover:text-white" />
-                    <Phone className="size-2.5 cursor-pointer hover:text-white" />
-                    <MoreVertical className="size-3 cursor-pointer hover:text-white" />
-                  </div>
-                </div>
-
-                {/* Chat Area Scroll Wrapper (Solid background) */}
-                <div
-                  ref={chatContainerRef}
-                  className="flex-1 whatsapp-wallpaper-solid p-2 overflow-y-auto space-y-2.5 flex flex-col scrollbar z-10"
-                >
-                  {chatMessages.map((msg) => {
-                    const isBot = msg.sender === "bot";
-                    return (
-                      <div
-                        key={msg.id}
-                        className={`flex flex-col max-w-[85%] animate-fade-in ${
-                          isBot
-                            ? "self-start items-start"
-                            : "self-end items-end"
-                        }`}
-                      >
-                        {/* Message bubble wrapper */}
-                        <div
-                          className={`rounded-xl px-2.5 py-1.5 text-xs shadow-[0_1px_1.5px_rgba(0,0,0,0.1)] relative ${
-                            isBot
-                              ? "bg-white text-slate-800 rounded-tl-none border-l-[1.5px] border-emerald-500"
-                              : "bg-[#e2f9c3] text-slate-800 rounded-tr-none"
-                          }`}
-                        >
-                          {/* WhatsApp speech bubble tail */}
-                          <div
-                            className={`absolute top-0 size-1.5 ${
-                              isBot
-                                ? "left-[-3px] bg-white border-l-[1.5px] border-emerald-500 rounded-bl-full"
-                                : "right-[-3px] bg-[#e2f9c3] rounded-br-full"
-                            }`}
-                            style={{
-                              clipPath: "polygon(100% 0, 0 0, 100% 100%)",
-                              transform: isBot ? "scaleX(-1)" : "none",
-                            }}
-                          ></div>
-
-                          <p className="whitespace-pre-line leading-normal font-medium text-xs text-slate-750">
-                            {msg.text}
-                          </p>
-
-                          {/* Displaying Service items list */}
-                          {isBot && msg.type === "list" && msg.listItems && (
-                            <div className="mt-2 space-y-1 border-t border-slate-100 pt-1.5 select-none">
-                              {msg.listItems.map((item, index) => (
-                                <div
-                                  key={index}
-                                  className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/50 px-2 py-0.5 rounded-md text-slate-600 font-semibold text-[11px]"
-                                >
-                                  <span className="size-1.5 rounded-full bg-emerald-500 shrink-0"></span>
-                                  {item}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Displaying Booking Link */}
-                          {isBot && msg.type === "link" && msg.linkUrl && (
-                            <div className="mt-1.5 select-none">
-                              <a
-                                href={msg.linkUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 border border-rose-100 text-rose-600 hover:bg-rose-100 transition rounded-lg text-[11px] font-bold shadow-sm"
-                              >
-                                <ExternalLink className="size-2.5" />
-                                {msg.linkUrl.replace("http://", "")}
-                              </a>
-                            </div>
-                          )}
-
-                          {/* Message metadata details */}
-                          <div className="flex justify-end items-center gap-1 mt-0.5 text-[8.5px] text-slate-400 font-bold select-none">
-                            <span>{msg.time}</span>
-                            {!isBot && (
-                              <CheckCheck className="size-2 text-[#34b7f1]" />
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Rendering Options Selection Buttons (WhatsApp Message Template) */}
-                        {isBot && msg.type === "options" && msg.options && (
-                          <div className="flex flex-col gap-1.5 mt-2 w-full select-none max-w-[190px]">
-                            {nodes.greeting.options?.map((opt) => (
-                              <button
-                                key={opt.id}
-                                disabled={selectedSimOption !== null}
-                                onClick={() =>
-                                  handleSimOptionClick(
-                                    opt.text,
-                                    opt.targetNodeId,
-                                  )
-                                }
-                                className={`w-full text-xs font-semibold text-center py-1.5 px-2.5 rounded-xl shadow-sm border transition duration-205 active:scale-97 text-[#008069] bg-white border-slate-100 hover:bg-slate-50 cursor-pointer ${
-                                  selectedSimOption === opt.text
-                                    ? "bg-emerald-50 border-emerald-350 text-emerald-700 font-bold shadow-inner"
-                                    : selectedSimOption !== null
-                                      ? "opacity-60 saturate-50"
-                                      : ""
-                                }`}
-                              >
-                                {opt.text}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-
-                  {/* Bot Typing Bubble */}
-                  {isTyping && (
-                    <div className="flex flex-col max-w-[80%] self-start items-start">
-                      <div className="rounded-xl px-2.5 py-1.5 bg-white shadow-sm rounded-tl-none border-l-[1.5px] border-emerald-500 relative flex items-center gap-1">
-                        <span className="size-1 rounded-full bg-slate-400 typing-dot"></span>
-                        <span className="size-1 rounded-full bg-slate-400 typing-dot"></span>
-                        <span className="size-1 rounded-full bg-slate-400 typing-dot"></span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* UX IMPROVEMENT: Conversation Loop */}
-                  {selectedSimOption && !isTyping && (
-                    <button
-                      onClick={handleBackToMenu}
-                      className="self-center mt-2.5 text-[10.5px] font-bold text-[#008069] bg-white border border-emerald-100 hover:bg-emerald-55 py-1 px-3 rounded-full shadow-sm cursor-pointer transition active:scale-95 flex items-center gap-1"
-                    >
-                      <Undo2 className="size-3" /> Back to Main Menu
-                    </button>
-                  )}
-                </div>
-
-                {/* Bottom Keyboard Bar Placeholder */}
-                <div className="bg-[#f0f2f5] p-1.5 pb-3.5 flex items-center gap-1.5 border-t border-slate-200 z-20 select-none">
-                  <div className="flex items-center gap-1 text-slate-400 px-0.5">
-                    <Smile className="size-4 cursor-pointer hover:text-slate-650" />
-                    <Paperclip className="size-3.5 cursor-pointer hover:text-slate-655 rotate-45" />
-                  </div>
-
-                  <div className="flex-1 bg-white rounded-full px-2.5 py-1 border border-slate-200 text-[11px] text-slate-400 select-none">
-                    Click above
-                  </div>
-
-                  <div className="flex items-center gap-1 text-slate-400 px-0.5">
-                    <Camera className="size-4 cursor-pointer hover:text-slate-650" />
-                    <div className="size-5 rounded-full bg-[#008069] text-white flex items-center justify-center shadow-sm">
-                      <Mic className="size-2.5" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* POPUP MODAL EDITOR */}
-      {editingNodeId && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-50 flex items-center justify-center p-4 pointer-events-auto">
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 w-full max-w-sm shadow-[0_20px_50px_rgba(15,23,42,0.3)] text-slate-800 animate-in fade-in zoom-in-95 duration-150">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 mb-3.5">
-              <div className="flex items-center gap-2">
-                <span className="p-1 rounded-lg bg-slate-100 flex items-center justify-center">
-                  {getNodeIcon(nodes[editingNodeId].iconName, "size-4")}
-                </span>
-                <h3 className="text-lg font-semibold text-slate-900">
-                  Edit Node Details
-                </h3>
-              </div>
-              <button
-                onClick={() => setEditingNodeId(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 transition rounded-lg hover:bg-slate-50 cursor-pointer border border-transparent hover:border-slate-200"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-
-            {/* Modal Form Content */}
-            <div className="space-y-4 max-h-[360px] overflow-y-auto pr-1 scrollbar mb-4">
-              {/* Field 1: Message Text */}
-              <div>
-                <label className="text-xs font-bold text-slate-450 uppercase tracking-wider block mb-1.5 select-none">
-                  {nodes[editingNodeId].type === "trigger"
-                    ? "Trigger keyword text"
-                    : "Bot response text"}
-                </label>
-                <textarea
-                  value={tempText}
-                  onChange={(e) => setTempText(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm font-medium text-slate-755 outline-none focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100 transition duration-200 leading-relaxed resize-none h-24 scrollbar"
                 />
               </div>
 
-              {/* Field 2: Booking Redirect URL */}
-              {nodes[editingNodeId].type === "message" &&
-                nodes[editingNodeId].id === "booking" && (
-                  <div>
-                    <label className="text-xs font-bold text-slate-450 uppercase tracking-wider block mb-1.5 select-none">
-                      Website booking link URL
-                    </label>
-                    <input
-                      type="text"
-                      value={tempLink}
-                      onChange={(e) => setTempLink(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm font-semibold text-slate-750 outline-none focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100 transition duration-200"
-                      placeholder="http://localhost:3000/book"
-                    />
-                  </div>
-                )}
-
-              {/* Field 3: Edit Buttons/Options titles */}
-              {nodes[editingNodeId].type === "options_menu" && (
-                <div className="space-y-3.5">
-                  <label className="text-xs font-bold text-slate-450 uppercase tracking-wider block select-none">
-                    Menu button titles
-                  </label>
-                  <div className="space-y-2">
-                    {tempOptions.map((opt, idx) => (
-                      <div
-                        key={opt.id}
-                        className="flex flex-col gap-1 bg-slate-50/50 p-2.5 border border-slate-200/80 rounded-xl"
-                      >
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider select-none px-1">
-                          Option {idx + 1}
-                        </span>
-                        <input
-                          type="text"
-                          value={opt.text}
-                          onChange={(e) => {
-                            const updated = [...tempOptions];
-                            updated[idx].text = e.target.value;
-                            setTempOptions(updated);
-                          }}
-                          className="flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm font-semibold text-slate-750 outline-none focus:border-slate-450 focus:ring-2 focus:ring-slate-150 transition"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Field 4: Edit Services List Catalog */}
-              {nodes[editingNodeId].type === "list" && (
-                <div className="space-y-3">
-                  <label className="text-xs font-bold text-slate-450 uppercase tracking-wider block select-none">
-                    Configure catalog services
-                  </label>
-
-                  {/* Service Add Input */}
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Add new service..."
-                      value={newItemText}
-                      onChange={(e) => setNewItemText(e.target.value)}
-                      className="flex-1 rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2 text-sm font-medium text-slate-750 outline-none focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100 transition duration-200"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && newItemText.trim() !== "") {
-                          e.preventDefault();
-                          setTempItems([...tempItems, newItemText.trim()]);
-                          setNewItemText("");
-                        }
-                      }}
-                    />
-                    <button
-                      onClick={() => {
-                        if (newItemText.trim() !== "") {
-                          setTempItems([...tempItems, newItemText.trim()]);
-                          setNewItemText("");
-                        }
-                      }}
-                      type="button"
-                      className="px-4.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-semibold transition hover:scale-[1.02] active:scale-95 cursor-pointer shadow-md shadow-slate-900/10"
-                    >
-                      <Plus className="size-4" />
-                    </button>
-                  </div>
-
-                  {/* List of items */}
-                  <div className="space-y-1.5 max-h-[140px] overflow-y-auto scrollbar pr-1">
-                    {tempItems.map((item, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between bg-slate-50/70 px-3 py-2 border border-slate-200/80 rounded-xl text-sm transition duration-150 hover:bg-white hover:border-slate-350"
-                      >
-                        <span className="font-semibold text-slate-755 flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-                          {item}
-                        </span>
-                        <button
-                          onClick={() => {
-                            const updated = tempItems.filter(
-                              (_, i) => i !== idx,
-                            );
-                            setTempItems(updated);
-                          }}
-                          className="p-1 text-slate-400 hover:text-rose-600 transition hover:bg-slate-100 rounded-lg cursor-pointer"
-                          title="Delete Service"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Actions Footer */}
-            <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3.5">
-              <button
-                onClick={() => setEditingNodeId(null)}
-                className="px-3.5 py-2 text-sm font-semibold text-slate-550 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200 transition rounded-xl cursor-pointer"
+              {/* Card 3C: Location outcome */}
+              <div
+                className={`w-full max-w-[250px] h-[140px] bg-white rounded-2xl border p-3 flex flex-col justify-between shadow-sm transition hover:shadow-md cursor-pointer relative mx-auto ${
+                  editingNodeId === "location"
+                    ? "border-indigo-500 ring-2 ring-indigo-100"
+                    : activePath === "location"
+                      ? "border-emerald-500 shadow-md shadow-emerald-50"
+                      : "border-slate-200"
+                }`}
+                onClick={() => openInspector("location")}
               >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveNodeChanges}
-                className="px-4.5 py-2 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 transition rounded-xl shadow-md shadow-slate-900/10 hover:scale-[1.02] active:scale-95 flex items-center gap-1.5 cursor-pointer"
-              >
-                Save Changes
-              </button>
+                <div>
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 mb-1.5">
+                    <div className="flex items-center gap-1.5">
+                      {getNodeIcon(nodes.location.iconName)}
+                      <span className="text-[10px] font-bold text-slate-800 uppercase tracking-wider">
+                        Reply: Location Details
+                      </span>
+                    </div>
+                    <Edit className="size-3.5 text-slate-400" />
+                  </div>
+                  <p className="text-[10px] text-slate-550 leading-normal line-clamp-4 whitespace-pre-line">
+                    {nodes.location.text}
+                  </p>
+                </div>
+
+                {/* Connection Input point socket */}
+                <div
+                  id="socket-location-in"
+                  className={`absolute left-[-5px] top-1/2 -translate-y-1/2 size-2 border border-white rounded-full shadow-sm transition-colors ${
+                    activePath === "location"
+                      ? "bg-emerald-500"
+                      : "bg-slate-300"
+                  }`}
+                />
+              </div>
             </div>
           </div>
         </div>
-      )}
-    </main>
+
+        {/* MOBILE INSPECTOR DRAWER BACKDROP */}
+        {editingNodeId && (
+          <div
+            onClick={() => setEditingNodeId(null)}
+            className="xl:hidden fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-sm transition-opacity duration-300 cursor-pointer"
+          />
+        )}
+
+        {/* RIGHT COLUMN: Node Properties Inspector Panel (drawer on mobile/tablet, inline on desktop) */}
+        <div
+          className={`border border-slate-200 bg-white p-5 shadow-lg flex flex-col justify-between overflow-y-auto shrink-0 select-none transition-transform duration-300 z-50 xl:z-10
+            fixed xl:relative top-[73px] xl:top-auto bottom-0 xl:bottom-auto right-0 xl:right-auto h-[calc(100vh-73px)] xl:h-full w-80 xl:rounded-3xl
+            ${editingNodeId ? "translate-x-0" : "translate-x-full xl:translate-x-0 xl:relative xl:flex"}`}
+        >
+          {editingNodeId ? (
+            <div className="flex-grow flex flex-col justify-between h-full min-h-0">
+              <div className="flex-grow flex flex-col min-h-0">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-5 shrink-0">
+                  <div>
+                    <h3 className="font-extrabold text-slate-900 text-sm">
+                      Node Inspector
+                    </h3>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      Customize properties dynamically
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setEditingNodeId(null)}
+                    className="flex size-7 items-center justify-center rounded-xl bg-slate-50 border border-slate-200 text-slate-400 hover:text-slate-700 transition cursor-pointer shrink-0"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+
+                <div className="flex-grow flex flex-col min-h-0 space-y-4">
+                  <div className="shrink-0">
+                    <label className="text-[10px] font-bold text-slate-450 uppercase tracking-wider block mb-1.5">
+                      Node Title
+                    </label>
+                    <input
+                      type="text"
+                      disabled
+                      value={nodes[editingNodeId].title}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-400 select-none outline-none"
+                    />
+                  </div>
+
+                  <div className="shrink-0">
+                    <label className="text-[10px] font-bold text-slate-440 uppercase tracking-wider block mb-1.5">
+                      WhatsApp Message Text
+                    </label>
+                    <textarea
+                      value={tempText}
+                      onChange={(e) => setTempText(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-xs font-semibold text-slate-700 outline-none focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100 transition duration-200 resize-none h-24 leading-relaxed scrollbar"
+                    />
+                  </div>
+
+                  {editingNodeId === "booking" && (
+                    <div className="shrink-0">
+                      <label className="text-[10px] font-bold text-slate-450 uppercase tracking-wider block mb-1.5">
+                        Redirect Link URL
+                      </label>
+                      <input
+                        type="url"
+                        value={tempLink}
+                        onChange={(e) => setTempLink(e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-xs font-semibold text-slate-700 outline-none focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100 transition duration-200"
+                      />
+                    </div>
+                  )}
+
+                  {nodes[editingNodeId].type === "options_menu" && (
+                    <div className="shrink-0 space-y-3">
+                      <label className="text-[10px] font-bold text-slate-440 uppercase tracking-wider block">
+                        Options Routing
+                      </label>
+                      <div className="space-y-2">
+                        {tempOptions.map((opt, idx) => (
+                          <div key={opt.id} className="flex gap-2 items-center">
+                            <input
+                              type="text"
+                              value={opt.text}
+                              onChange={(e) => {
+                                const copy = [...tempOptions];
+                                copy[idx].text = e.target.value;
+                                setTempOptions(copy);
+                              }}
+                              className="flex-1 rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-slate-400"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {nodes[editingNodeId].type === "list" && (
+                    <div className="flex-grow flex flex-col min-h-0">
+                      <label className="text-[10px] font-bold text-slate-440 uppercase tracking-wider block mb-1.5 shrink-0">
+                        Service Items
+                      </label>
+                      <div className="flex-grow overflow-y-auto border border-slate-100 bg-slate-50/50 p-2.5 rounded-2xl space-y-1.5 scrollbar min-h-[140px]">
+                        {tempItems.map((item, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between bg-white border border-slate-150 px-2.5 py-1.5 rounded-xl shrink-0 shadow-sm"
+                          >
+                            <span className="text-xs font-bold text-slate-655 truncate">
+                              {item}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setTempItems(
+                                  tempItems.filter((_, i) => i !== idx),
+                                )
+                              }
+                              className="text-slate-400 hover:text-rose-500 transition cursor-pointer"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="border-t border-slate-100 pt-4 mt-4 shrink-0 flex flex-col gap-4">
+                {/* Only render Add Service Item if editing list node */}
+                {nodes[editingNodeId].type === "list" && (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-bold text-slate-440 uppercase tracking-wider block">
+                      Add Service Item
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Add new service..."
+                        value={newItemText}
+                        onChange={(e) => setNewItemText(e.target.value)}
+                        className="flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-semibold text-slate-700 outline-none focus:border-slate-400 focus:bg-white transition"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (newItemText.trim()) {
+                            setTempItems([...tempItems, newItemText.trim()]);
+                            setNewItemText("");
+                          }
+                        }}
+                        className="w-10 h-10 rounded-xl bg-[#0f294a] text-white hover:bg-slate-800 transition active:scale-95 cursor-pointer flex items-center justify-center shrink-0"
+                      >
+                        <Plus className="size-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleSaveNodeChanges}
+                  className="w-full rounded-xl bg-[#0f294a] text-white py-2.5 text-xs font-bold transition hover:bg-slate-800 active:scale-95 cursor-pointer shadow-sm"
+                >
+                  Save Card Details
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex-grow flex flex-col justify-center items-center text-center p-4 my-auto">
+              <Edit className="size-8 text-slate-350 stroke-[1.5] mb-2" />
+              <h4 className="font-bold text-slate-700 text-xs">
+                No Selected Card
+              </h4>
+              <p className="text-[10px] text-slate-450 mt-1 max-w-[180px] leading-relaxed">
+                Click the edit icon or click any card inside the interactive
+                canvas to inspect and configure its settings.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

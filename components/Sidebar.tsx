@@ -5,12 +5,10 @@ import {
   Blocks,
   Calendar,
   ChevronDown,
-  ChevronLeft,
   House,
   MapPin,
   MessageCircle,
   Bolt,
-  Target,
   Workflow,
   Zap,
 } from "lucide-react";
@@ -32,49 +30,23 @@ const navItems = [
 type SidebarProps = {
   isOpen: boolean;
   onToggle: () => void;
+  topOffset?: number;
 };
 
-export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
+export default function Sidebar({ isOpen, topOffset = 73 }: SidebarProps) {
   const pathname = usePathname();
   const centerWhenClosed = !isOpen ? "justify-center" : "";
 
   return (
     <aside
-      className={`fixed left-0 top-0 bottom-0 z-50 flex h-screen flex-col gap-4 border-r border-slate-200/80 bg-white/95 px-3 py-4 shadow-[10px_0_30px_-18px_rgba(15,23,42,0.22)] backdrop-blur transition-all duration-300 ease-in-out ${
-        isOpen ? "w-60" : "w-16"
+      style={{
+        top: `${topOffset}px`,
+        height: `calc(100vh - ${topOffset}px)`,
+      }}
+      className={`fixed bottom-0 z-50 flex flex-col gap-4 border-r border-slate-200/80 bg-white/95 px-3 py-4 shadow-[10px_0_30px_-18px_rgba(15,23,42,0.22)] backdrop-blur transition-all duration-300 ease-in-out ${
+        isOpen ? "w-60 left-0" : "w-16 md:left-0 -left-64"
       }`}
     >
-      <div className={`flex min-h-14 w-full items-center ${centerWhenClosed}`}>
-        {!isOpen ? (
-          <button
-            type="button"
-            onClick={onToggle}
-            className="flex size-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700 transition hover:scale-105 hover:bg-slate-100"
-          >
-            <Target className="size-5" />
-          </button>
-        ) : (
-          <>
-            <div className="flex flex-1 items-center gap-2">
-              <div className="flex size-9 items-center justify-center rounded-xl bg-slate-900 text-white shadow-lg shadow-slate-900/10">
-                <Target className="size-4" />
-              </div>
-              <div>
-                <h1 className="text-lg font-semibold text-slate-900">Bookly</h1>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={onToggle}
-              className="flex size-9 cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100"
-            >
-              <ChevronLeft className="size-5" />
-            </button>
-          </>
-        )}
-      </div>
-
       <nav className="flex flex-1 flex-col gap-1.5">
         {navItems.map(({ icon: Icon, title, href }) => {
           const isActive = pathname === href;

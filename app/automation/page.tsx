@@ -7,9 +7,9 @@ import {
   Star,
   Gift,
   CheckCircle2,
-  ChevronDown,
   Save,
 } from "lucide-react";
+import CustomSelect from "@/components/dashboard/CustomSelect";
 
 // Toggle component
 const Toggle = ({
@@ -77,6 +77,30 @@ export default function AutomationPage() {
     }, 2500);
   };
 
+  const reminderTimingOptions = [
+    { value: "12 hours before", label: "12 hours before appointment" },
+    { value: "24 hours before", label: "24 hours before appointment" },
+    { value: "48 hours before", label: "48 hours before appointment" },
+  ];
+
+  const followupDelayOptions = [
+    { value: "3 days after", label: "3 days after visit" },
+    { value: "1 week after", label: "1 week after visit" },
+    { value: "2 weeks after", label: "2 weeks after visit" },
+  ];
+
+  const reviewsDelayOptions = [
+    { value: "1 hour after", label: "1 hour after visit" },
+    { value: "2 hours after", label: "2 hours after visit" },
+    { value: "24 hours after", label: "24 hours after visit" },
+  ];
+
+  const recoveryDelayOptions = [
+    { value: "1 day after", label: "1 day after no-show" },
+    { value: "2 days after", label: "2 days after no-show" },
+    { value: "3 days after", label: "3 days after no-show" },
+  ];
+
   return (
     <main className="flex w-full flex-col mt-4">
       {/* Title */}
@@ -129,17 +153,13 @@ export default function AutomationPage() {
               <label className="text-xs font-bold text-slate-450 uppercase tracking-wider block mb-1.5 select-none">
                 Trigger Timing
               </label>
-              <div className="relative max-w-xs">
-                <select
+              <div className="max-w-xs">
+                <CustomSelect
+                  options={reminderTimingOptions}
                   value={reminderTiming}
-                  onChange={(e) => setReminderTiming(e.target.value)}
-                  className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/50 pl-4 pr-10 py-3 text-sm font-semibold text-slate-750 outline-none hover:bg-slate-100 focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100 transition duration-200 cursor-pointer"
-                >
-                  <option value="12 hours before">12 hours before appointment</option>
-                  <option value="24 hours before">24 hours before appointment</option>
-                  <option value="48 hours before">48 hours before appointment</option>
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 size-4.5 text-slate-400" />
+                  onChange={(val) => setReminderTiming(val)}
+                  className="w-full"
+                />
               </div>
             </div>
 
@@ -184,17 +204,13 @@ export default function AutomationPage() {
               <label className="text-xs font-bold text-slate-450 uppercase tracking-wider block mb-1.5 select-none">
                 Trigger Timing
               </label>
-              <div className="relative max-w-xs">
-                <select
+              <div className="max-w-xs">
+                <CustomSelect
+                  options={followupDelayOptions}
                   value={followupDelay}
-                  onChange={(e) => setFollowupDelay(e.target.value)}
-                  className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/50 pl-4 pr-10 py-3 text-sm font-semibold text-slate-750 outline-none hover:bg-slate-100 focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100 transition duration-200 cursor-pointer"
-                >
-                  <option value="3 days after">3 days after visit</option>
-                  <option value="1 week after">1 week after visit</option>
-                  <option value="2 weeks after">2 weeks after visit</option>
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 size-4.5 text-slate-400" />
+                  onChange={(val) => setFollowupDelay(val)}
+                  className="w-full"
+                />
               </div>
             </div>
 
@@ -240,18 +256,12 @@ export default function AutomationPage() {
                 <label className="text-xs font-bold text-slate-455 uppercase tracking-wider block mb-1.5 select-none">
                   Trigger Delay
                 </label>
-                <div className="relative">
-                  <select
-                    value={reviewsDelay}
-                    onChange={(e) => setReviewsDelay(e.target.value)}
-                    className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/50 pl-4 pr-10 py-3 text-sm font-semibold text-slate-750 outline-none hover:bg-slate-100 focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100 transition duration-200 cursor-pointer"
-                  >
-                    <option value="1 hour after">1 hour after visit</option>
-                    <option value="2 hours after">2 hours after visit</option>
-                    <option value="24 hours after">24 hours after visit</option>
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 size-4.5 text-slate-400" />
-                </div>
+                <CustomSelect
+                  options={reviewsDelayOptions}
+                  value={reviewsDelay}
+                  onChange={(val) => setReviewsDelay(val)}
+                  className="w-full"
+                />
               </div>
 
               <div>
@@ -262,7 +272,7 @@ export default function AutomationPage() {
                   type="url"
                   value={reviewsLink}
                   onChange={(e) => setReviewsLink(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm font-medium text-slate-750 outline-none focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100 transition duration-200"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm font-medium text-slate-755 outline-none focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100 transition duration-200"
                 />
               </div>
             </div>
@@ -309,18 +319,12 @@ export default function AutomationPage() {
                 <label className="text-xs font-bold text-slate-450 uppercase tracking-wider block mb-1.5 select-none">
                   Trigger Timing
                 </label>
-                <div className="relative">
-                  <select
-                    value={recoveryDelay}
-                    onChange={(e) => setRecoveryDelay(e.target.value)}
-                    className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/50 pl-4 pr-10 py-3 text-sm font-semibold text-slate-750 outline-none hover:bg-slate-100 focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100 transition duration-200 cursor-pointer"
-                  >
-                    <option value="1 day after">1 day after no-show</option>
-                    <option value="2 days after">2 days after no-show</option>
-                    <option value="3 days after">3 days after no-show</option>
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 size-4.5 text-slate-400" />
-                </div>
+                <CustomSelect
+                  options={recoveryDelayOptions}
+                  value={recoveryDelay}
+                  onChange={(val) => setRecoveryDelay(val)}
+                  className="w-full"
+                />
               </div>
 
               <div>
@@ -331,7 +335,7 @@ export default function AutomationPage() {
                   type="text"
                   value={recoveryDiscount}
                   onChange={(e) => setRecoveryDiscount(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm font-medium text-slate-750 outline-none focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100 transition duration-200"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm font-medium text-slate-755 outline-none focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100 transition duration-200"
                 />
               </div>
             </div>
@@ -348,7 +352,7 @@ export default function AutomationPage() {
               <div className="text-xs text-slate-400 font-medium mt-2 flex flex-wrap gap-1.5 items-center select-none">
                 <span>Supported tags:</span>
                 {["[Customer Name]", "[Discount Code]"].map(tag => (
-                  <code key={tag} className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200/50">
+                  <code key={tag} className="bg-slate-100 text-slate-650 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200/50">
                     {tag}
                   </code>
                 ))}

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/components/Providers";
+import SearchableDropdown from "@/components/SearchableDropdown";
 import { getCurrencySymbol } from "@/lib/constants";
 import {
   Clock,
@@ -171,6 +172,15 @@ export default function ServicesPage() {
   const handleAddCategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!business?.id || !newCategoryInput.trim()) return;
+    
+    // Case-insensitive check for duplicates
+    const normalizedNewName = newCategoryInput.trim().toLowerCase();
+    const exists = categories.some((c) => c.name.toLowerCase() === normalizedNewName);
+    if (exists) {
+      setErrorMsg("A category with this name already exists.");
+      return;
+    }
+
     setSaving(true);
     setErrorMsg(null);
 
@@ -197,6 +207,35 @@ export default function ServicesPage() {
     } catch (err) {
       console.error(err);
       setErrorMsg(err instanceof Error ? err.message : "Failed to add category.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteCategory = async (categoryId: string) => {
+    // Check if services are attached
+    const attachedServices = services.filter((s) => s.category_id === categoryId);
+    if (attachedServices.length > 0) {
+      alert("Cannot delete this category because it has active services attached to it. Please reassign or delete the services first.");
+      return;
+    }
+
+    if (!confirm("Are you sure you want to delete this category?")) return;
+
+    setSaving(true);
+    setErrorMsg(null);
+    try {
+      const { error } = await supabase
+        .from("service_categories")
+        .delete()
+        .eq("id", categoryId);
+
+      if (error) throw error;
+
+      setCategories(categories.filter((c) => c.id !== categoryId));
+    } catch (err) {
+      console.error(err);
+      setErrorMsg(err instanceof Error ? err.message : "Failed to delete category.");
     } finally {
       setSaving(false);
     }
@@ -443,13 +482,23 @@ export default function ServicesPage() {
                   className="rounded-2xl border border-slate-200/80 bg-white/70 p-4.5 shadow-[0_8px_20px_-6px_rgba(15,23,42,0.06)] backdrop-blur-sm flex flex-col justify-between"
                 >
                   <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="size-7 bg-indigo-50 text-indigo-650 rounded-lg flex items-center justify-center">
-                        <Tag className="size-3.5" />
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="size-7 bg-indigo-50 text-indigo-650 rounded-lg flex items-center justify-center shrink-0">
+                          <Tag className="size-3.5" />
+                        </div>
+                        <h4 className="font-extrabold text-sm text-slate-900 truncate">
+                          {cat.name}
+                        </h4>
                       </div>
-                      <h4 className="font-extrabold text-sm text-slate-900 truncate">
-                        {cat.name}
-                      </h4>
+                      <button
+                        onClick={() => handleDeleteCategory(cat.id)}
+                        disabled={saving}
+                        className="p-1 rounded-lg border border-rose-100 hover:bg-rose-50 text-rose-500 transition cursor-pointer shrink-0"
+                        aria-label="Delete Category"
+                      >
+                        <Trash2 className="size-3" />
+                      </button>
                     </div>
                     {catServices.length > 0 ? (
                       <ul className="space-y-1.5 pl-1">
@@ -594,20 +643,13 @@ export default function ServicesPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-3.5">
-                <div>
-                  <label className="text-[10px] font-bold text-slate-450 uppercase tracking-wider block mb-1.5">Category</label>
-                  <select
-                    value={newCategoryId}
-                    onChange={(e) => setNewCategoryId(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-xs font-semibold text-slate-900 outline-none focus:border-slate-450 focus:bg-white transition cursor-pointer"
-                  >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <SearchableDropdown
+                  options={categories.map((c) => ({ value: c.id, label: c.name }))}
+                  value={newCategoryId}
+                  onChange={setNewCategoryId}
+                  placeholder="Select Category"
+                  label="Category"
+                />
 
                 <div>
                   <label className="text-[10px] font-bold text-slate-450 uppercase tracking-wider block mb-1.5">Price ({getCurrencySymbol(settings?.currency)})</label>
@@ -715,20 +757,13 @@ export default function ServicesPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-3.5">
-                <div>
-                  <label className="text-[10px] font-bold text-slate-450 uppercase tracking-wider block mb-1.5">Category</label>
-                  <select
-                    value={editCategoryId}
-                    onChange={(e) => setEditCategoryId(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-xs font-semibold text-slate-900 outline-none focus:border-slate-450 focus:bg-white transition cursor-pointer"
-                  >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <SearchableDropdown
+                  options={categories.map((c) => ({ value: c.id, label: c.name }))}
+                  value={editCategoryId}
+                  onChange={setEditCategoryId}
+                  placeholder="Select Category"
+                  label="Category"
+                />
 
                 <div>
                   <label className="text-[10px] font-bold text-slate-450 uppercase tracking-wider block mb-1.5">Price ({getCurrencySymbol(settings?.currency)})</label>

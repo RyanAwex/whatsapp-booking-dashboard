@@ -2,7 +2,7 @@
 
 import React from "react";
 import Appointments from "@/components/dashboard/Appointments";
-import CalendarCard from "@/components/dashboard/CalendarCard";
+import StaffAvailability from "@/components/dashboard/StaffAvailability";
 import Hero from "@/components/dashboard/Hero";
 import RecentActivity from "@/components/dashboard/RecentActivity";
 import RevenueOverview from "@/components/dashboard/RevenueOverview";
@@ -15,7 +15,7 @@ const DashboardPage = () => {
         <Appointments />
         <RevenueOverview />
         <RecentActivity />
-        <CalendarCard />
+        <StaffAvailability />
       </section>
     </main>
   );
